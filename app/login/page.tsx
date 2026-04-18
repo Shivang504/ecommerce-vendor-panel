@@ -10,8 +10,8 @@ import { AlertCircle } from 'lucide-react';
 import { useSettings } from '@/components/settings/settings-provider';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('admin@grocify.com');
-  const [password, setPassword] = useState('Admin@123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
