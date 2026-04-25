@@ -1,6 +1,7 @@
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 export interface Vendor {
   _id?: ObjectId;
@@ -48,6 +49,8 @@ export interface Vendor {
   username: string;
   password: string;
   sendCredentialsEmail: boolean;
+  resetPasswordToken?: string;
+  resetPasswordTokenExpiry?: Date;
   // Wallet & Earnings fields
   walletBalance?: number; // Current available balance in wallet
   totalEarnings?: number; // Total earnings from all orders
@@ -68,7 +71,11 @@ export async function getVendorById(id: string) {
 
 export async function getVendorByEmail(email: string) {
   const { db } = await connectToDatabase();
-  return db.collection('vendors').findOne({ email });
+  const trimmed = email.trim();
+  return db.collection('vendors').findOne(
+    { email: trimmed },
+    { collation: { locale: 'en', strength: 2 } }
+  );
 }
 
 export async function createVendor(vendor: Omit<Vendor, '_id'>) {
@@ -119,4 +126,68 @@ export async function hashVendorPassword(password: string) {
     console.error('[v0] Error hashing vendor password:', error);
     throw error;
   }
+}
+
+export function generateVendorResetPasswordToken(): string {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+export async function setVendorResetPasswordToken(vendorId: string, token: string) {
+  const { db } = await connectToDatabase();
+  const expiryDate = new Date();
+  expiryDate.setHours(expiryDate.getHours() + 1);
+
+  await db.collection('vendors').updateOne(
+    { _id: new ObjectId(vendorId) },
+    {
+      $set: {
+        resetPasswordToken: token,
+        resetPasswordTokenExpiry: expiryDate,
+        updatedAt: new Date(),
+      },
+    }
+  );
+}
+
+export async function verifyVendorResetPasswordToken(
+  token: string
+): Promise<{ success: boolean; vendorId?: string; error?: string; expired?: boolean }> {
+  try {
+    const { db } = await connectToDatabase();
+    const vendor = await db.collection('vendors').findOne({ resetPasswordToken: token });
+
+    if (!vendor) {
+      return { success: false, error: 'Invalid or expired reset link. Please request a new one.' };
+    }
+
+    const now = new Date();
+    if (vendor.resetPasswordTokenExpiry && vendor.resetPasswordTokenExpiry < now) {
+      return {
+        success: false,
+        error: 'This reset link has expired. Please request a new password reset.',
+        expired: true,
+      };
+    }
+
+    return { success: true, vendorId: vendor._id.toString() };
+  } catch (error) {
+    console.error('[v0] verifyVendorResetPasswordToken:', error);
+    return { success: false, error: 'Could not verify reset link. Please try again.' };
+  }
+}
+
+export async function resetVendorPasswordWithToken(vendorId: string, newPassword: string) {
+  const { db } = await connectToDatabase();
+  const hashedPassword = await hashVendorPassword(newPassword);
+
+  await db.collection('vendors').updateOne(
+    { _id: new ObjectId(vendorId) },
+    {
+      $set: {
+        password: hashedPassword,
+        updatedAt: new Date(),
+      },
+      $unset: { resetPasswordToken: '', resetPasswordTokenExpiry: '' },
+    }
+  );
 }

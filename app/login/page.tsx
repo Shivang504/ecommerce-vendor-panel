@@ -1,24 +1,28 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useSettings } from '@/components/settings/settings-provider';
+import { displayNameForVendorPanel } from '@/lib/vendor-brand';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { settings } = useSettings();
   const primaryColor = settings.primaryColor || '#22c55e';
   const siteName = settings.siteName || 'E-commerce';
+  const loginHeroName = displayNameForVendorPanel(siteName);
   const tagline = settings.tagline;
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -80,17 +84,17 @@ export default function LoginPage() {
         <div className='text-center mb-8 space-y-2'>
           {settings.logo ? (
             <div className='w-20 h-20 mx-auto rounded-2xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden'>
-              <img src={settings.logo} alt={siteName} className='w-full h-full object-contain' />
+              <img src={settings.logo} alt={loginHeroName} className='w-full h-full object-contain' />
             </div>
           ) : (
             <div
               className='inline-flex items-center justify-center w-20 h-20 rounded-2xl text-white text-4xl font-bold'
               style={{ backgroundColor: primaryColor }}>
-              {siteName[0]}
+              {loginHeroName[0]}
             </div>
           )}
           <div>
-            <h1 className='text-3xl font-bold text-slate-900 dark:text-white mb-1'>{siteName}</h1>
+            <h1 className='text-3xl font-bold text-slate-900 dark:text-white mb-1'>{loginHeroName}</h1>
             {tagline && <p className='text-slate-600 dark:text-slate-400 text-sm'>{tagline}</p>}
           </div>
         </div>
@@ -121,14 +125,24 @@ export default function LoginPage() {
 
               <div>
                 <label className='block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2'>Password</label>
-                <Input
-                  type='password'
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder='••••••••'
-                  className='w-full h-12 bg-blue-50 dark:bg-slate-700 border-blue-100 dark:border-slate-600 rounded-lg'
-                  disabled={loading}
-                />
+                <div className='relative'>
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder='••••••••'
+                    autoComplete='current-password'
+                    className='w-full h-12 pr-11 bg-blue-50 dark:bg-slate-700 border-blue-100 dark:border-slate-600 rounded-lg'
+                    disabled={loading}
+                  />
+                  <button
+                    type='button'
+                    onClick={() => setShowPassword(v => !v)}
+                    className='absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-md text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-offset-0 focus-visible:ring-slate-400'
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                    {showPassword ? <EyeOff className='h-5 w-5' aria-hidden /> : <Eye className='h-5 w-5' aria-hidden />}
+                  </button>
+                </div>
               </div>
 
               <div className='flex items-center justify-between'>
@@ -138,9 +152,9 @@ export default function LoginPage() {
                     Remember me
                   </label>
                 </div>
-                <a href='#' className='text-sm font-medium text-orange-500 hover:text-orange-600'>
+                <Link href='/forgot-password' className='text-sm font-medium text-orange-500 hover:text-orange-600'>
                   Forgot Password?
-                </a>
+                </Link>
               </div>
 
               <Button

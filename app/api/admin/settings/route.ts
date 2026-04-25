@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 
 const DEFAULT_SETTINGS = {
-  siteName: 'Grocify Admin',
-  siteTitle: 'Grocify – Admin Panel',
+  siteName: 'Grocify Vendor',
+  siteTitle: 'Grocify – Vendor Panel',
   tagline: '',
   primaryColor: '#16a34a',
   accentColor: '#0f172a',

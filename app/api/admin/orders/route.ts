@@ -9,6 +9,9 @@ export async function GET(request: NextRequest) {
 
     const search = searchParams.get('search');
     const status = searchParams.get('status');
+    const orderStatusIn = searchParams.get('orderStatusIn');
+    const orderStatusSingle = searchParams.get('orderStatus');
+    const returnedItems = searchParams.get('returned');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     
@@ -26,10 +29,23 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    if (status && status !== 'all') {
-      // Support both payment status and order status filters
-      if (['pending', 'paid', 'failed', 'refunded', 'cancelled'].includes(status)) {
+    if (returnedItems === '1' || returnedItems === 'true') {
+      filter['items.itemStatus'] = 'returned';
+    } else if (orderStatusIn) {
+      const parts = orderStatusIn
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+      if (parts.length) {
+        filter.orderStatus = parts.length === 1 ? parts[0] : { $in: parts };
+      }
+    } else if (orderStatusSingle) {
+      filter.orderStatus = orderStatusSingle.trim();
+    } else if (status && status !== 'all') {
+      if (['pending', 'paid', 'failed', 'refunded'].includes(status)) {
         filter.paymentStatus = status;
+      } else if (status === 'cancelled') {
+        filter.orderStatus = 'cancelled';
       } else {
         filter.orderStatus = status;
       }

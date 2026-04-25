@@ -1,12 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import toast from 'react-hot-toast';
+import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   ArrowUpRight,
   ArrowDownRight,
   Download,
+  CalendarDays,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   MoreVertical,
@@ -29,6 +35,13 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { useSettings } from '@/components/settings/settings-provider';
+import { displayNameForVendorPanel } from '@/lib/vendor-brand';
+import {
+  DASHBOARD_EXPORT_MAX_MONTH_OFFSET,
+  dateAtFirstOfOffset,
+  getMonthRangeByOffset,
+  monthOffsetFromAnyDayInMonth,
+} from '@/lib/dashboard-month-range';
 
 /** Matches storefront `--web` (see globals.css) */
 const BRAND_WEB = '#401d5d';
@@ -59,9 +72,27 @@ export function DashboardClient() {
   const { settings } = useSettings();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
 
-  const siteLabel = settings.siteName?.trim() || 'Store';
-  const dashboardTitle = `${siteLabel} · Admin`;
+  const selectedDate = useMemo(() => dateAtFirstOfOffset(monthOffset), [monthOffset]);
+  const [calendarMonth, setCalendarMonth] = useState(() => selectedDate);
+  useEffect(() => {
+    setCalendarMonth(selectedDate);
+  }, [selectedDate]);
+
+  const calendarBounds = useMemo(() => {
+    const today = new Date();
+    const endMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const startMonth = new Date(today.getFullYear() - 10, today.getMonth(), 1);
+    return { startMonth, endMonth };
+  }, []);
+
+  const selectedMonthLabel = getMonthRangeByOffset(monthOffset).label;
+
+  const siteLabel = displayNameForVendorPanel(settings.siteName?.trim() || 'Store');
+  const dashboardTitle = `${siteLabel} · Dashboard`;
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -137,6 +168,42 @@ export function DashboardClient() {
 
   const formatNumber = (amount: number) => amount.toLocaleString('en-IN');
 
+  const handleExportDraft = async () => {
+    try {
+      setExporting(true);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
+      const res = await fetch(`/api/admin/dashboard/export?monthOffset=${monthOffset}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'Export failed');
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition');
+      const match = cd?.match(/filename="([^"]+)"/);
+      const filename = match?.[1] || `dashboard-draft-${monthOffset}.csv`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded draft for ${selectedMonthLabel}`);
+    } catch (e) {
+      console.error('[Dashboard export]', e);
+      toast.error(e instanceof Error ? e.message : 'Could not export');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     return (
@@ -149,10 +216,20 @@ export function DashboardClient() {
   };
 
   const kpiItems = [
-    { label: 'Total orders', stat: data.stats.totalOrders, icon: ShoppingBag },
-    { label: 'Pending', stat: data.stats.pendingOrders, icon: Clock },
-    { label: 'Cancelled', stat: data.stats.cancelledOrders, icon: XCircle },
-    { label: 'Returns', stat: data.stats.returnedItems, icon: RotateCcw },
+    { label: 'Total orders', stat: data.stats.totalOrders, icon: ShoppingBag, href: '/admin/orders' },
+    {
+      label: 'Pending',
+      stat: data.stats.pendingOrders,
+      icon: Clock,
+      href: '/admin/orders?orderStatusIn=pending,processing,confirmed',
+    },
+    {
+      label: 'Cancelled',
+      stat: data.stats.cancelledOrders,
+      icon: XCircle,
+      href: '/admin/orders?orderStatus=cancelled',
+    },
+    { label: 'Returns', stat: data.stats.returnedItems, icon: RotateCcw, href: '/admin/orders?returned=1' },
   ];
 
   return (
@@ -167,16 +244,76 @@ export function DashboardClient() {
             <p className='mt-1 text-sm text-slate-500'>Orders, revenue, and catalog — aligned with your storefront.</p>
           </div>
           <div className='flex flex-wrap items-center gap-2'>
-            <div className='flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600'>
-              <span>This month</span>
-              <ChevronLeft className='h-4 w-4 opacity-50' />
+            <div className='flex items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white p-1 shadow-sm'>
+              <Button
+                type='button'
+                variant='ghost'
+                size='icon'
+                title='Older month'
+                disabled={monthOffset >= DASHBOARD_EXPORT_MAX_MONTH_OFFSET}
+                onClick={() => setMonthOffset(m => Math.min(DASHBOARD_EXPORT_MAX_MONTH_OFFSET, m + 1))}
+                className='h-9 w-9 shrink-0 text-slate-600 hover:bg-slate-100 hover:text-slate-900'>
+                <ChevronLeft className='h-4 w-4' />
+              </Button>
+              <Popover open={monthPickerOpen} onOpenChange={setMonthPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    title='Choose month'
+                    className='h-9 min-w-[12.5rem] justify-between gap-2 px-3 font-medium text-slate-800 hover:bg-slate-50'>
+                    <span className='flex items-center gap-2 truncate'>
+                      <CalendarDays className='h-4 w-4 shrink-0 opacity-70' style={{ color: BRAND_WEB }} />
+                      <span className='truncate'>{selectedMonthLabel}</span>
+                    </span>
+                    <ChevronDown className='h-4 w-4 shrink-0 opacity-50' />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align='end'
+                  sideOffset={8}
+                  className='w-auto border border-slate-200 p-0 shadow-xl sm:min-w-[min(100vw-2rem,20rem)]'>
+                  <div className='border-b border-slate-100 bg-slate-50/80 px-3 py-2'>
+                    <p className='text-xs font-medium text-slate-600'>Export period</p>
+                    <p className='text-[11px] text-slate-500'>Pick any day in the month — CSV uses the full month.</p>
+                  </div>
+                  <Calendar
+                    mode='single'
+                    month={calendarMonth}
+                    onMonthChange={setCalendarMonth}
+                    selected={selectedDate}
+                    onSelect={d => {
+                      if (!d) return;
+                      setMonthOffset(monthOffsetFromAnyDayInMonth(d));
+                      setMonthPickerOpen(false);
+                    }}
+                    captionLayout='dropdown'
+                    startMonth={calendarBounds.startMonth}
+                    endMonth={calendarBounds.endMonth}
+                    disabled={{ after: new Date() }}
+                    className='rounded-b-lg [--cell-size:2.25rem]'
+                  />
+                </PopoverContent>
+              </Popover>
+              <Button
+                type='button'
+                variant='ghost'
+                size='icon'
+                title='Newer month'
+                disabled={monthOffset <= 0}
+                onClick={() => setMonthOffset(m => Math.max(0, m - 1))}
+                className='h-9 w-9 shrink-0 text-slate-600 hover:bg-slate-100 hover:text-slate-900'>
+                <ChevronRight className='h-4 w-4' />
+              </Button>
             </div>
             <button
               type='button'
-              className='inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-95'
+              onClick={handleExportDraft}
+              disabled={exporting}
+              className='inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60'
               style={{ backgroundColor: BRAND_WEB }}>
               <Download className='h-4 w-4' />
-              Export
+              {exporting ? 'Preparing…' : 'Export draft (CSV)'}
             </button>
           </div>
         </div>
@@ -186,29 +323,37 @@ export function DashboardClient() {
         {/* KPI */}
         <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4'>
           {kpiItems.map((item, index) => (
-            <Card
+            <Link
               key={index}
-              className='border border-slate-100 bg-white p-5 shadow-sm transition hover:shadow-md'
-              style={{ borderTopWidth: 3, borderTopColor: BRAND_WEB }}>
-              <div className='mb-3 flex items-start justify-between'>
-                <p className='text-sm font-medium text-slate-600'>{item.label}</p>
-                <item.icon className='h-4 w-4' style={{ color: BRAND_MUTED }} />
-              </div>
-              <p className='mb-2 text-3xl font-bold tabular-nums text-slate-900'>{item.stat.value}</p>
-              <div className='flex items-center gap-1'>
-                {item.stat.trend === 'down' ? (
-                  <ArrowDownRight className='h-4 w-4 text-red-500' />
-                ) : (
-                  <ArrowUpRight className='h-4 w-4 text-emerald-600' />
-                )}
-                <span
-                  className={`text-xs font-semibold ${
-                    item.stat.trend === 'down' ? 'text-red-600' : 'text-emerald-600'
-                  }`}>
-                  {item.stat.change}
-                </span>
-              </div>
-            </Card>
+              href={item.href}
+              className='group block rounded-xl outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-[#401d5d]'
+              aria-label={`${item.label}: ${item.stat.value}. Open orders filtered by ${item.label}`}>
+              <Card
+                className='h-full border border-slate-100 bg-white p-5 shadow-sm transition group-hover:shadow-md group-hover:border-slate-200'
+                style={{ borderTopWidth: 3, borderTopColor: BRAND_WEB }}>
+                <div className='mb-3 flex items-start justify-between'>
+                  <p className='text-sm font-medium text-slate-600'>{item.label}</p>
+                  <item.icon className='h-4 w-4 shrink-0' style={{ color: BRAND_MUTED }} />
+                </div>
+                <p className='mb-2 text-3xl font-bold tabular-nums text-slate-900'>{item.stat.value}</p>
+                <div className='flex items-center gap-1'>
+                  {item.stat.trend === 'down' ? (
+                    <ArrowDownRight className='h-4 w-4 text-red-500' />
+                  ) : (
+                    <ArrowUpRight className='h-4 w-4 text-emerald-600' />
+                  )}
+                  <span
+                    className={`text-xs font-semibold ${
+                      item.stat.trend === 'down' ? 'text-red-600' : 'text-emerald-600'
+                    }`}>
+                    {item.stat.change}
+                  </span>
+                  <span className='ml-auto text-xs font-medium text-slate-400 group-hover:text-[#401d5d]'>
+                    View →
+                  </span>
+                </div>
+              </Card>
+            </Link>
           ))}
         </div>
 

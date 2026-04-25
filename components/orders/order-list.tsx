@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,11 +47,13 @@ export function OrderList() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryKey = searchParams.toString();
 
   useEffect(() => {
     fetchOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, search, statusFilter]);
+  }, [page, limit, search, statusFilter, queryKey]);
 
   const fetchOrders = async () => {
     try {
@@ -61,7 +63,20 @@ export function OrderList() {
         limit: limit.toString(),
       });
       if (search) params.append('search', search);
-      if (statusFilter !== 'all') params.append('status', statusFilter);
+
+      const returned = searchParams.get('returned') === '1' || searchParams.get('returned') === 'true';
+      const orderStatusIn = searchParams.get('orderStatusIn');
+      const orderStatus = searchParams.get('orderStatus');
+
+      if (returned) {
+        params.append('returned', '1');
+      } else if (orderStatusIn) {
+        params.append('orderStatusIn', orderStatusIn);
+      } else if (orderStatus) {
+        params.append('orderStatus', orderStatus);
+      } else if (statusFilter !== 'all') {
+        params.append('status', statusFilter);
+      }
 
       const res = await fetch(`/api/admin/orders?${params.toString()}`);
       if (res.ok) {
@@ -171,7 +186,13 @@ export function OrderList() {
               onChange={e => handleSearchChange(e.target.value)}
               className='max-w-xs'
             />
-            <Select value={statusFilter} onValueChange={v => setStatusFilter(v as any)}>
+            <Select
+              value={statusFilter}
+              onValueChange={v => {
+                setStatusFilter(v as typeof statusFilter);
+                setPage(1);
+                router.replace('/admin/orders', { scroll: false });
+              }}>
               <SelectTrigger className='w-40'>
                 <SelectValue placeholder='Status' />
               </SelectTrigger>
