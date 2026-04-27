@@ -1,6 +1,7 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdminAuth } from "@/lib/auth";
 
 export async function GET(request: Request) {
   try {
@@ -67,7 +68,10 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const denied = requireAdminAuth(request);
+  if (denied) return denied;
+
   try {
     const { db } = await connectToDatabase();
     const body = await request.json();

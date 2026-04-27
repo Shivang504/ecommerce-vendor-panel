@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { getUserFromRequest, isVendor } from '@/lib/auth';
+import { assertVendorCatalogSelections } from '@/lib/vendor-product-catalog';
 import { sanitizeAttributeSelections } from '@/lib/product-attributes';
 
 const normalizeProductPayload = (payload: any) => {
@@ -141,7 +142,14 @@ export async function PUT(
       console.log('[v0] Vendor trying to update another vendor\'s product');
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
-    
+
+    if (currentUser && isVendor(currentUser) && !isStatusOnlyUpdate) {
+      const merged = { ...existingProduct, ...normalizedUpdateData } as Record<string, unknown>;
+      const catalogErr = await assertVendorCatalogSelections(db, merged);
+      if (catalogErr) {
+        return NextResponse.json({ error: catalogErr }, { status: 400 });
+      }
+    }
 
     const result = await db.collection('products').updateOne(
       { _id: new ObjectId(id) },

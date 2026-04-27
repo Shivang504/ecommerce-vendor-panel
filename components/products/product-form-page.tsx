@@ -887,6 +887,19 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     if (!formData.metaDescription?.trim()) newErrors.metaDescription = 'Meta description is required';
     if (!formData.mainImage?.trim()) newErrors.mainImage = 'Main image is required';
     if (!formData.category?.trim()) newErrors.category = 'Category is required';
+
+    if (isVendor && formData.brand?.trim()) {
+      if (!brands.some(b => b.name === formData.brand)) {
+        newErrors.brand = 'Choose a brand from the list (only admin-added brands are allowed).';
+      }
+    }
+    if (isVendor) {
+      const leaf = formData.childCategory || formData.subcategory || formData.category;
+      if (leaf?.trim() && !categories.some(c => String(c._id) === String(leaf))) {
+        newErrors.category = 'Choose a category from the list (only admin-added categories are allowed).';
+      }
+    }
+
     // Vendor validation only for admins, vendors have it auto-set
     if (!isVendor && !formData.vendor?.trim()) {
       newErrors.vendor = 'Vendor is required';
@@ -928,9 +941,14 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
 
       console.log('[v0] Submitting product data:', cleanData);
 
+      const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        credentials: 'include',
         body: JSON.stringify(cleanData),
       });
 
@@ -1587,6 +1605,13 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                         helperText={productId ? 'You can edit the SKU if needed' : 'SKU auto-generates as you type product name'}
                       />
 
+                      {isVendor && (
+                        <p className='text-xs text-slate-500 dark:text-slate-400 -mb-1'>
+                          Brand, category, subcategory, and child category are chosen only from options the store admin
+                          has created — you cannot add new catalog entries here.
+                        </p>
+                      )}
+
                       <Dropdown
                         options={[
                           { label: 'Select Brand', value: '' },
@@ -1600,7 +1625,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                         labelMain='Brand'
                         value={formData.brand}
                         onChange={option => handleChange('brand', option.value)}
-                        disabled={isVendor}
+                        error={isFieldInActiveTab('brand') ? errors.brand : undefined}
                       />
 
                       <Dropdown
@@ -1652,7 +1677,6 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                             handleChange('childCategoryId', '');
                           }
                         }}
-                        disabled={isVendor}
                       />
 
                       <FormField

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { getUserFromRequest, isVendor } from '@/lib/auth';
+import { assertVendorCatalogSelections } from '@/lib/vendor-product-catalog';
 import { sanitizeAttributeSelections } from '@/lib/product-attributes';
 import { ObjectId } from 'mongodb';
 
@@ -249,6 +250,10 @@ export async function POST(request: NextRequest) {
     // If vendor, automatically set vendorId
     if (currentUser && isVendor(currentUser)) {
       body.vendorId = currentUser.id;
+      const catalogErr = await assertVendorCatalogSelections(db, body);
+      if (catalogErr) {
+        return NextResponse.json({ error: catalogErr }, { status: 400 });
+      }
     }
 
     const productToCreate = {
