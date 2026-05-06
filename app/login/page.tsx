@@ -101,7 +101,7 @@ export default function LoginPage() {
 
             {error && (
               <div className='mb-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex gap-3'>
-                <AlertCircle className='w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5' />
+                <AlertCircle className='w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5' />
                 <p className='text-sm text-red-700 dark:text-red-400'>{error}</p>
               </div>
             )}
@@ -138,7 +138,7 @@ export default function LoginPage() {
                     Remember me
                   </label>
                 </div>
-                <a href='#' className='text-sm font-medium text-orange-500 hover:text-orange-600'>
+                <a href='/forgot-password' className='text-sm font-medium text-orange-500 hover:text-orange-600'>
                   Forgot Password?
                 </a>
               </div>

@@ -1,6 +1,7 @@
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 export interface Vendor {
   _id?: ObjectId;
@@ -48,6 +49,8 @@ export interface Vendor {
   username: string;
   password: string;
   sendCredentialsEmail: boolean;
+  resetPasswordToken?: string;
+  resetPasswordTokenExpiry?: Date;
   // Wallet & Earnings fields
   walletBalance?: number; // Current available balance in wallet
   totalEarnings?: number; // Total earnings from all orders
@@ -69,6 +72,21 @@ export async function getVendorById(id: string) {
 export async function getVendorByEmail(email: string) {
   const { db } = await connectToDatabase();
   return db.collection('vendors').findOne({ email });
+}
+
+export async function getVendorByEmailOrPhone(identifier: string) {
+  const { db } = await connectToDatabase();
+  const normalized = identifier.trim();
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
+
+  if (isEmail) {
+    return db.collection('vendors').findOne({ email: normalized });
+  }
+
+  // Treat anything else as a phone-like identifier; match against known phone fields.
+  return db.collection('vendors').findOne({
+    $or: [{ phone: normalized }, { alternatePhone: normalized }, { whatsappNumber: normalized }],
+  });
 }
 
 export async function createVendor(vendor: Omit<Vendor, '_id'>) {
@@ -119,4 +137,25 @@ export async function hashVendorPassword(password: string) {
     console.error('[v0] Error hashing vendor password:', error);
     throw error;
   }
+}
+
+export function generateVendorResetPasswordToken(): string {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+export async function setVendorResetPasswordToken(vendorId: string, token: string) {
+  const { db } = await connectToDatabase();
+  const expiryDate = new Date();
+  expiryDate.setHours(expiryDate.getHours() + 1); // 1 hour expiry
+
+  await db.collection('vendors').updateOne(
+    { _id: new ObjectId(vendorId) },
+    {
+      $set: {
+        resetPasswordToken: token,
+        resetPasswordTokenExpiry: expiryDate,
+        updatedAt: new Date(),
+      },
+    }
+  );
 }
