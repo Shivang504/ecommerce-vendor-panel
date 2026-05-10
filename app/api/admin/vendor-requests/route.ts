@@ -1,107 +1,119 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ObjectId } from 'mongodb';
 import { getUserFromRequest, isAdmin, isVendor } from '@/lib/auth';
-import { getVendorById } from '@/lib/models/vendor';
 import {
   createVendorAdminRequest,
-  listVendorAdminRequests,
-  type VendorAdminRequestStatus,
+  listAllVendorAdminRequests,
+  listVendorAdminRequestsForVendor,
+  type VendorAdminRequest,
   type VendorAdminRequestType,
 } from '@/lib/models/vendor-admin-request';
+import { getVendorById } from '@/lib/models/vendor';
 import { createNotification } from '@/lib/models/notification';
 
-const REQUEST_TYPES: VendorAdminRequestType[] = [
-  'new_category_catalog',
-  'new_subcategory',
-  'new_child_category',
-  'new_brand',
-  'catalog_change',
+const ALLOWED_TYPES: VendorAdminRequestType[] = [
+  'new_catalogue_category',
+  'brand_or_tag',
+  'listing_merchandising',
+  'account_billing',
+  'technical',
   'other',
 ];
 
-function isValidRequestType(v: unknown): v is VendorAdminRequestType {
-  return typeof v === 'string' && REQUEST_TYPES.includes(v as VendorAdminRequestType);
+function serializeRequest(doc: VendorAdminRequest & { _id: ObjectId }) {
+  return {
+    _id: doc._id.toString(),
+    vendorId: doc.vendorId && typeof doc.vendorId === 'object' && 'toString' in doc.vendorId ? doc.vendorId.toString() : String(doc.vendorId),
+    vendorName: doc.vendorName,
+    vendorEmail: doc.vendorEmail,
+    requestType: doc.requestType,
+    subject: doc.subject,
+    message: doc.message,
+    status: doc.status,
+    adminReply: doc.adminReply,
+    createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt,
+    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt,
+    updatedBy:
+      doc.updatedBy && typeof doc.updatedBy === 'object' && 'toString' in doc.updatedBy
+        ? doc.updatedBy.toString()
+        : doc.updatedBy
+          ? String(doc.updatedBy)
+          : undefined,
+  };
 }
 
+/** GET: vendors see their requests; admins see all (optional filters). */
 export async function GET(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request);
-    if (!user) {
+    const currentUser = getUserFromRequest(request);
+    if (!currentUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1', 10) || 1;
-    const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10) || 20, 100);
-    const status = searchParams.get('status') as VendorAdminRequestStatus | null;
-
-    const allowedStatus: VendorAdminRequestStatus[] = ['open', 'in_review', 'completed', 'declined'];
-    const statusFilter =
-      status && allowedStatus.includes(status) ? (status as VendorAdminRequestStatus) : undefined;
-
-    if (isVendor(user)) {
-      const { items, total } = await listVendorAdminRequests({
-        vendorId: user.id,
-        status: statusFilter,
-        page,
-        limit,
+    if (isVendor(currentUser)) {
+      const rows = await listVendorAdminRequestsForVendor(currentUser.id);
+      return NextResponse.json({
+        requests: rows.map(r => serializeRequest(r as VendorAdminRequest & { _id: ObjectId })),
       });
-      return NextResponse.json({ requests: items, total, page, limit });
     }
 
-    if (isAdmin(user)) {
-      const { items, total } = await listVendorAdminRequests({
-        status: statusFilter,
-        page,
-        limit,
+    if (isAdmin(currentUser)) {
+      const { searchParams } = new URL(request.url);
+      const status = searchParams.get('status') as VendorAdminRequest['status'] | null;
+      const vendorId = searchParams.get('vendorId') || undefined;
+      const filters: { status?: VendorAdminRequest['status']; vendorId?: string } = {};
+      if (status && ['open', 'in_progress', 'resolved', 'closed'].includes(status)) {
+        filters.status = status;
+      }
+      if (vendorId && ObjectId.isValid(vendorId)) filters.vendorId = vendorId;
+      const rows = await listAllVendorAdminRequests(filters);
+      return NextResponse.json({
+        requests: rows.map(r => serializeRequest(r as VendorAdminRequest & { _id: ObjectId })),
       });
-      return NextResponse.json({ requests: items, total, page, limit });
     }
 
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   } catch (error: unknown) {
     console.error('[vendor-requests GET]', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to load requests' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to load requests' }, { status: 500 });
   }
 }
 
+/** POST: vendor creates a request. */
 export async function POST(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request);
-    if (!user || !isVendor(user)) {
-      return NextResponse.json({ error: 'Only vendors can submit requests' }, { status: 403 });
+    const currentUser = getUserFromRequest(request);
+    if (!currentUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    if (!isVendor(currentUser)) {
+      return NextResponse.json({ error: 'Only vendors can create requests' }, { status: 403 });
+    }
+
+    const vendor = await getVendorById(currentUser.id);
+    if (!vendor) {
+      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
     }
 
     const body = await request.json();
-    const { requestType, subject, message } = body || {};
+    const requestType = body.requestType as VendorAdminRequestType;
+    const subject = typeof body.subject === 'string' ? body.subject.trim() : '';
+    const message = typeof body.message === 'string' ? body.message.trim() : '';
 
-    if (!isValidRequestType(requestType)) {
+    if (!ALLOWED_TYPES.includes(requestType)) {
       return NextResponse.json({ error: 'Invalid request type' }, { status: 400 });
     }
-    if (typeof subject !== 'string' || subject.trim().length < 3 || subject.trim().length > 200) {
-      return NextResponse.json(
-        { error: 'Subject must be between 3 and 200 characters' },
-        { status: 400 }
-      );
+    if (subject.length < 3 || subject.length > 200) {
+      return NextResponse.json({ error: 'Subject must be between 3 and 200 characters' }, { status: 400 });
     }
-    if (typeof message !== 'string' || message.trim().length < 10 || message.trim().length > 8000) {
-      return NextResponse.json(
-        { error: 'Message must be between 10 and 8000 characters' },
-        { status: 400 }
-      );
+    if (message.length < 10 || message.length > 8000) {
+      return NextResponse.json({ error: 'Message must be between 10 and 8000 characters' }, { status: 400 });
     }
 
-    const vendor = await getVendorById(user.id);
-    if (!vendor) {
-      return NextResponse.json({ error: 'Vendor profile not found' }, { status: 404 });
-    }
-
-    const id = await createVendorAdminRequest({
-      vendorId: user.id,
-      vendorEmail: typeof vendor.email === 'string' ? vendor.email : undefined,
-      vendorStoreName: (vendor.storeName as string) || (vendor.ownerName as string) || undefined,
+    const insertedId = await createVendorAdminRequest({
+      vendorId: currentUser.id,
+      vendorName: (vendor.storeName as string) || (vendor.ownerName as string) || '',
+      vendorEmail: (vendor.email as string) || '',
       requestType,
       subject,
       message,
@@ -111,24 +123,26 @@ export async function POST(request: NextRequest) {
       await createNotification({
         type: 'vendor_admin_request',
         title: 'New vendor request',
-        message: `${vendor.storeName || vendor.ownerName || 'Vendor'}: ${subject.trim().slice(0, 120)}`,
-        isRead: false,
+        message: `${vendor.storeName || vendor.ownerName}: ${subject}`,
         metadata: {
-          requestId: id,
-          vendorId: user.id,
-          vendorStoreName: vendor.storeName || vendor.ownerName,
+          requestId: insertedId.toString(),
+          vendorId: currentUser.id,
+          requestType,
         },
       });
     } catch (e) {
       console.error('[vendor-requests POST] notification', e);
     }
 
-    return NextResponse.json({ success: true, id }, { status: 201 });
+    return NextResponse.json(
+      {
+        success: true,
+        id: insertedId.toString(),
+      },
+      { status: 201 }
+    );
   } catch (error: unknown) {
     console.error('[vendor-requests POST]', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to submit request' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to submit request' }, { status: 500 });
   }
 }

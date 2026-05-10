@@ -139,7 +139,8 @@ export function Sidebar() {
     [primaryColor, accentColor]
   );
 
-  const menuItems = [
+  const menuItems = useMemo(
+    () => [
     { label: 'Dashboard', href: '/admin', badge: null, icon: LayoutDashboard, allowedRoles: ['superadmin', 'admin', 'vendor'] },
     {
       label: 'Products',
@@ -160,7 +161,7 @@ export function Sidebar() {
       allowedRoles: ['vendor'],
     },
     {
-      label: 'Requests to admin',
+      label: userData?.role === 'vendor' ? 'Requests to admin' : 'Vendor requests',
       href: '/admin/vendor-requests',
       badge: null,
       icon: ClipboardList,
@@ -215,7 +216,9 @@ export function Sidebar() {
       icon: Settings,
       allowedRoles: ['superadmin', 'admin'],
     },
-  ];
+  ],
+    [userData?.role]
+  );
 
   // Filter menu items based on user role
   const filteredMenuItems = menuItems.filter(item => {

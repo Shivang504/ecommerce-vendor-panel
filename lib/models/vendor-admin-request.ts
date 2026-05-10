@@ -1,107 +1,98 @@
 import { connectToDatabase } from '@/lib/mongodb';
-import { ObjectId, Filter } from 'mongodb';
+import { ObjectId } from 'mongodb';
 
 export type VendorAdminRequestType =
-  | 'new_category_catalog'
-  | 'new_subcategory'
-  | 'new_child_category'
-  | 'new_brand'
-  | 'catalog_change'
+  | 'new_catalogue_category'
+  | 'brand_or_tag'
+  | 'listing_merchandising'
+  | 'account_billing'
+  | 'technical'
   | 'other';
 
-export type VendorAdminRequestStatus = 'open' | 'in_review' | 'completed' | 'declined';
+export type VendorAdminRequestStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
 
-export interface VendorAdminRequestDoc {
-  _id?: ObjectId;
-  vendorId: string;
+export interface VendorAdminRequest {
+  _id?: string | ObjectId;
+  vendorId: string | ObjectId;
+  vendorName?: string;
   vendorEmail?: string;
-  vendorStoreName?: string;
   requestType: VendorAdminRequestType;
   subject: string;
   message: string;
   status: VendorAdminRequestStatus;
-  adminNotes?: string;
+  adminReply?: string;
   createdAt: Date;
   updatedAt: Date;
+  updatedBy?: string | ObjectId;
 }
 
-const COLLECTION = 'vendor_admin_requests';
-
-function serialize(doc: VendorAdminRequestDoc & { _id: ObjectId }) {
-  return {
-    ...doc,
-    _id: doc._id.toString(),
-  };
-}
-
-export async function createVendorAdminRequest(data: {
-  vendorId: string;
-  vendorEmail?: string;
-  vendorStoreName?: string;
-  requestType: VendorAdminRequestType;
-  subject: string;
-  message: string;
-}): Promise<string> {
+export async function createVendorAdminRequest(
+  data: Omit<VendorAdminRequest, '_id' | 'createdAt' | 'updatedAt' | 'status' | 'adminReply' | 'updatedBy'>
+) {
   const { db } = await connectToDatabase();
   const now = new Date();
-  const doc: VendorAdminRequestDoc = {
-    vendorId: data.vendorId,
-    vendorEmail: data.vendorEmail,
-    vendorStoreName: data.vendorStoreName,
-    requestType: data.requestType,
-    subject: data.subject.trim(),
-    message: data.message.trim(),
-    status: 'open',
+  const doc = {
+    ...data,
+    vendorId: typeof data.vendorId === 'string' ? new ObjectId(data.vendorId) : data.vendorId,
+    status: 'open' as VendorAdminRequestStatus,
     createdAt: now,
     updatedAt: now,
   };
-  const result = await db.collection(COLLECTION).insertOne(doc);
-  return result.insertedId.toString();
+  const result = await db.collection('vendor_admin_requests').insertOne(doc);
+  return result.insertedId;
 }
 
-export async function listVendorAdminRequests(options: {
-  vendorId?: string;
+export async function listVendorAdminRequestsForVendor(vendorId: string) {
+  const { db } = await connectToDatabase();
+  return db
+    .collection('vendor_admin_requests')
+    .find({ vendorId: new ObjectId(vendorId) })
+    .sort({ createdAt: -1 })
+    .toArray() as Promise<VendorAdminRequest[]>;
+}
+
+export async function listAllVendorAdminRequests(filters?: {
   status?: VendorAdminRequestStatus;
-  page: number;
-  limit: number;
-}): Promise<{ items: ReturnType<typeof serialize>[]; total: number }> {
+  vendorId?: string;
+}) {
   const { db } = await connectToDatabase();
-  const filter: Filter<VendorAdminRequestDoc> = {};
-  if (options.vendorId) {
-    filter.vendorId = options.vendorId;
-  }
-  if (options.status) {
-    filter.status = options.status;
-  }
-  const skip = (Math.max(1, options.page) - 1) * options.limit;
-  const col = db.collection<VendorAdminRequestDoc>(COLLECTION);
-  const [items, total] = await Promise.all([
-    col.find(filter).sort({ createdAt: -1 }).skip(skip).limit(options.limit).toArray(),
-    col.countDocuments(filter),
-  ]);
-  return {
-    items: items.map(d => serialize(d as VendorAdminRequestDoc & { _id: ObjectId })),
-    total,
-  };
+  const query: Record<string, unknown> = {};
+  if (filters?.status) query.status = filters.status;
+  if (filters?.vendorId) query.vendorId = new ObjectId(filters.vendorId);
+  return db
+    .collection('vendor_admin_requests')
+    .find(query)
+    .sort({ createdAt: -1 })
+    .toArray() as Promise<VendorAdminRequest[]>;
 }
 
-export async function getVendorAdminRequestById(id: string): Promise<ReturnType<typeof serialize> | null> {
-  if (!ObjectId.isValid(id)) return null;
+export async function getVendorAdminRequestById(id: string) {
   const { db } = await connectToDatabase();
-  const doc = await db.collection<VendorAdminRequestDoc>(COLLECTION).findOne({ _id: new ObjectId(id) });
-  if (!doc?._id) return null;
-  return serialize(doc as VendorAdminRequestDoc & { _id: ObjectId });
+  try {
+    return (await db.collection('vendor_admin_requests').findOne({ _id: new ObjectId(id) })) as VendorAdminRequest | null;
+  } catch {
+    return null;
+  }
 }
 
-export async function updateVendorAdminRequestById(
+export async function updateVendorAdminRequestByAdmin(
   id: string,
-  updates: { status?: VendorAdminRequestStatus; adminNotes?: string }
-): Promise<boolean> {
-  if (!ObjectId.isValid(id)) return false;
+  updates: {
+    status?: VendorAdminRequestStatus;
+    adminReply?: string;
+    updatedBy: string;
+  }
+) {
   const { db } = await connectToDatabase();
-  const set: Record<string, unknown> = { updatedAt: new Date() };
-  if (updates.status !== undefined) set.status = updates.status;
-  if (updates.adminNotes !== undefined) set.adminNotes = updates.adminNotes.trim();
-  const result = await db.collection(COLLECTION).updateOne({ _id: new ObjectId(id) }, { $set: set });
-  return result.modifiedCount > 0 || result.matchedCount > 0;
+  const $set: Record<string, unknown> = { updatedAt: new Date() };
+  if (updates.status !== undefined) $set.status = updates.status;
+  if (updates.adminReply !== undefined) $set.adminReply = updates.adminReply;
+  if (updates.updatedBy) $set.updatedBy = new ObjectId(updates.updatedBy);
+
+  const result = await db.collection('vendor_admin_requests').findOneAndUpdate(
+    { _id: new ObjectId(id) },
+    { $set },
+    { returnDocument: 'after' }
+  );
+  return result?.value as VendorAdminRequest | null;
 }
