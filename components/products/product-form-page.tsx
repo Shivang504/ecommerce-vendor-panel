@@ -51,6 +51,9 @@ const JEWELLERY_PURITY_OPTIONS = [
 
 type ProductType = (typeof PRODUCT_TYPE_OPTIONS)[number]['value'];
 type WholesalePriceType = (typeof WHOLESALE_PRICE_TYPE_OPTIONS)[number]['value'];
+
+const PRODUCT_FORM_TAB_ORDER = ['basic', 'pricing', 'inventory', 'attributes', 'images', 'seo', 'other'] as const;
+type ProductFormTabId = (typeof PRODUCT_FORM_TAB_ORDER)[number];
 type JewelleryPurity = (typeof JEWELLERY_PURITY_OPTIONS)[number]['value'];
 
 interface AttributeOption {
@@ -245,8 +248,8 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     []
   );
   const [brands, setBrands] = useState<Array<{ _id: string; name: string; status?: string }>>([]);
-  const [activeTab, setActiveTab] = useState<'basic' | 'pricing' | 'inventory' | 'attributes' | 'images' | 'seo' | 'other'>('basic');
-  const [tabsWithErrors, setTabsWithErrors] = useState<Set<'basic' | 'pricing' | 'inventory' | 'images' | 'attributes' | 'seo' | 'other'>>(
+  const [activeTab, setActiveTab] = useState<ProductFormTabId>('basic');
+  const [tabsWithErrors, setTabsWithErrors] = useState<Set<ProductFormTabId>>(
     new Set()
   );
   const [availableTags, setAvailableTags] = useState<string[]>([]);
@@ -772,7 +775,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   };
 
   // Map field names to their corresponding tabs
-  const fieldToTabMap: Record<string, 'basic' | 'pricing' | 'inventory' | 'attributes' | 'images' | 'seo' | 'other'> = {
+  const fieldToTabMap: Record<string, ProductFormTabId> = {
     product_type: 'basic',
     name: 'basic',
     sku: 'basic',
@@ -835,8 +838,8 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   // Get which tabs have errors
   const getTabsWithErrors = (
     errorFields: Record<string, string>
-  ): Set<'basic' | 'pricing' | 'inventory' | 'attributes' | 'images' | 'seo' | 'other'> => {
-    const tabs = new Set<'basic' | 'pricing' | 'inventory' | 'attributes' | 'images' | 'seo' | 'other'>();
+  ): Set<ProductFormTabId> => {
+    const tabs = new Set<ProductFormTabId>();
     Object.keys(errorFields).forEach(field => {
       const tab = fieldToTabMap[field];
       if (tab) {
@@ -863,7 +866,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     return filtered;
   };
 
-  const validateForm = (): boolean => {
+  const getValidationErrors = (): Record<string, string> => {
     const newErrors: Record<string, string> = {};
     const isJewelleryProduct = formData.product_type === 'Jewellery';
 
@@ -895,14 +898,56 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
       newErrors.return_policy = 'Return policy is required when returns are enabled';
     }
 
+    return newErrors;
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors = getValidationErrors();
     setErrors(newErrors);
-    const tabsWithErrorsSet = getTabsWithErrors(newErrors);
-    setTabsWithErrors(tabsWithErrorsSet);
+    setTabsWithErrors(getTabsWithErrors(newErrors));
     return Object.keys(newErrors).length === 0;
+  };
+
+  const validateActiveTab = (): boolean => {
+    const newErrors = getValidationErrors();
+    const tabErrors: Record<string, string> = {};
+    for (const key of Object.keys(newErrors)) {
+      if (fieldToTabMap[key] === activeTab) {
+        tabErrors[key] = newErrors[key];
+      }
+    }
+    const merged: Record<string, string> = { ...errors };
+    for (const k of Object.keys(merged)) {
+      if (fieldToTabMap[k] === activeTab) {
+        delete merged[k];
+      }
+    }
+    Object.assign(merged, tabErrors);
+    setErrors(merged);
+    setTabsWithErrors(getTabsWithErrors(merged));
+    return Object.keys(tabErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const isFinalTab = activeTab === 'other';
+
+    if (!isFinalTab) {
+      if (!validateActiveTab()) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please fix the errors in this section before continuing',
+          variant: 'destructive',
+        });
+        return;
+      }
+      const idx = PRODUCT_FORM_TAB_ORDER.indexOf(activeTab);
+      if (idx >= 0 && idx < PRODUCT_FORM_TAB_ORDER.length - 1) {
+        setActiveTab(PRODUCT_FORM_TAB_ORDER[idx + 1]);
+      }
+      return;
+    }
 
     if (!validateForm()) {
       toast({
@@ -2851,7 +2896,13 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                   type='submit'
                   disabled={loading}
                   className='bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white'>
-                  {loading ? 'Saving...' : productId ? 'Update Product' : 'Create Product'}
+                  {loading
+                    ? 'Saving...'
+                    : activeTab === 'other'
+                      ? productId
+                        ? 'Update Product'
+                        : 'Create Product'
+                      : 'Save & Proceed'}
                 </Button>
               </div>
             </section>
