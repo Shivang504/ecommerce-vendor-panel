@@ -37,6 +37,7 @@ import {
   Wallet,
   Warehouse as WarehouseIcon,
   BarChart3,
+  ClipboardList,
 } from 'lucide-react';
 
 
@@ -157,6 +158,13 @@ export function Sidebar() {
       badge: null,
       icon: BarChart3,
       allowedRoles: ['vendor'],
+    },
+    {
+      label: 'Requests to admin',
+      href: '/admin/vendor-requests',
+      badge: null,
+      icon: ClipboardList,
+      allowedRoles: ['vendor', 'superadmin', 'admin'],
     },
     { label: 'Payments', href: '/admin/payments', badge: null, icon: CreditCard, allowedRoles: ['superadmin', 'admin'] },
     { label: 'Warehouses', href: '/admin/warehouses', badge: null, icon: WarehouseIcon, allowedRoles: ['superadmin', 'admin'] },

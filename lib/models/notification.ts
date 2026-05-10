@@ -13,7 +13,8 @@ export type NotificationType =
   | 'system_alert'
   | 'withdrawal_request'
   | 'withdrawal_approved'
-  | 'withdrawal_rejected';
+  | 'withdrawal_rejected'
+  | 'vendor_admin_request';
 
 export interface Notification {
   _id?: string | ObjectId;
