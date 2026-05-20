@@ -1645,7 +1645,6 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                         labelMain='Brand'
                         value={formData.brand}
                         onChange={option => handleChange('brand', option.value)}
-                        disabled={isVendor}
                       />
 
                       <Dropdown
@@ -1697,7 +1696,6 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                             handleChange('childCategoryId', '');
                           }
                         }}
-                        disabled={isVendor}
                       />
 
                       <FormField
