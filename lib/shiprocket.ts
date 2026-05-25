@@ -5,6 +5,36 @@
 
 import { isShiprocketEnabled } from '@/lib/shiprocket-env';
 
+const SR_PREFIX = '[Shiprocket]';
+
+/** Structured logs for debugging pickup / AWB / auth failures */
+function srLog(
+  step: string,
+  data?: Record<string, unknown>,
+  level: 'info' | 'warn' | 'error' = 'info'
+) {
+  const line = {
+    ts: new Date().toISOString(),
+    step,
+    ...data,
+  };
+  const msg = `${SR_PREFIX} ${step}`;
+  if (level === 'error') console.error(msg, line);
+  else if (level === 'warn') console.warn(msg, line);
+  else console.log(msg, line);
+}
+
+function maskEmail(email: string): string {
+  const at = email.indexOf('@');
+  if (at <= 1) return '***';
+  return `${email.slice(0, 2)}***${email.slice(at)}`;
+}
+
+function previewBody(text: string, max = 800): string {
+  const t = text || '';
+  return t.length <= max ? t : `${t.slice(0, max)}…(${t.length} chars)`;
+}
+
 interface ShiprocketTokenResponse {
   token: string;
   token_type: string;
@@ -88,8 +118,10 @@ async function getShiprocketToken(): Promise<string> {
   // Check if cached token is still valid (24 hours = 86400000 ms)
   const now = Date.now();
   if (cachedToken && tokenExpiry > now) {
+    srLog('auth.cache_hit', { expiresInMs: tokenExpiry - now });
     return cachedToken;
   }
+  srLog('auth.cache_miss', { reason: cachedToken ? 'expired' : 'no_token' });
 
   // Get credentials from env, fallback to hardcoded if not available
   // Note: API key contains special characters ($, %, !, #) - ensure they're read correctly
@@ -128,10 +160,19 @@ async function getShiprocketTokenWithCredentials(
 
   // Ensure credentials are valid
   if (!email || !apiKey) {
+    srLog('auth.missing_credentials', { hasEmail: !!email, hasApiKey: !!apiKey }, 'error');
     throw new Error('Shiprocket email and API key are required');
   }
 
   try {
+    const authUrl = `${baseUrl}/auth/login`;
+    srLog('auth.request', {
+      url: authUrl,
+      email: maskEmail(email),
+      apiKeyLength: apiKey.length,
+      apiKeyPrefix: apiKey.slice(0, 4),
+    });
+
     // Build request body exactly as Postman does
     const requestBody = {
       email: email,
@@ -141,7 +182,7 @@ async function getShiprocketTokenWithCredentials(
     // Stringify request body - JSON.stringify handles special characters correctly
     const requestBodyString = JSON.stringify(requestBody);
     
-    const response = await fetch(`${baseUrl}/auth/login`, {
+    const response = await fetch(authUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -163,6 +204,17 @@ async function getShiprocketTokenWithCredentials(
       // Clear cached token on auth failure
       cachedToken = null;
       tokenExpiry = 0;
+
+      srLog(
+        'auth.failed',
+        {
+          httpStatus: response.status,
+          statusText: response.statusText,
+          message: errorData.message || errorData.error,
+          bodyPreview: previewBody(responseText),
+        },
+        'error'
+      );
       
       throw new Error(`Shiprocket authentication failed: ${errorData.message || errorData.error || response.statusText}`);
     }
@@ -171,10 +223,12 @@ async function getShiprocketTokenWithCredentials(
     try {
       data = JSON.parse(responseText);
     } catch (e) {
+      srLog('auth.parse_error', { bodyPreview: previewBody(responseText) }, 'error');
       throw new Error(`Invalid JSON response from Shiprocket: ${responseText}`);
     }
 
     if (!data.token) {
+      srLog('auth.no_token_in_body', { bodyPreview: previewBody(responseText) }, 'error');
       throw new Error('Shiprocket token not received in response');
     }
 
@@ -182,8 +236,10 @@ async function getShiprocketTokenWithCredentials(
     cachedToken = data.token;
     tokenExpiry = now + (24 * 60 * 60 * 1000) - (5 * 60 * 1000);
 
+    srLog('auth.success', { tokenLength: data.token.length, cacheUntil: new Date(tokenExpiry).toISOString() });
     return cachedToken;
   } catch (error: any) {
+    srLog('auth.exception', { message: error.message, stack: error.stack }, 'error');
     throw new Error(`Failed to authenticate with Shiprocket: ${error.message}`);
   }
 }
@@ -231,6 +287,7 @@ export async function checkShiprocketServiceability(
   const enabled = isShiprocketEnabled();
   
   if (!enabled) {
+    srLog('serviceability.skipped', { reason: 'disabled' }, 'warn');
     return {
       isServiceable: false,
       couriers: [],
@@ -302,6 +359,15 @@ export async function checkShiprocketServiceability(
 
     const serviceabilityUrl = `${baseUrl}/courier/serviceability/?${queryParams.toString()}`;
 
+    srLog('serviceability.request', {
+      url: serviceabilityUrl,
+      deliveryPincode: cleanDeliveryPincode,
+      pickupPincode: cleanPickupPincode,
+      weight,
+      codFlag,
+      warehouseId: warehouseId || null,
+    });
+
     const finalResponse = await fetch(serviceabilityUrl, {
       method: 'GET',
       headers: {
@@ -312,7 +378,15 @@ export async function checkShiprocketServiceability(
 
     const responseText = await finalResponse.text();
     if (!finalResponse.ok) {
-      // Return non-serviceable if API fails
+      srLog(
+        'serviceability.http_error',
+        {
+          httpStatus: finalResponse.status,
+          statusText: finalResponse.statusText,
+          bodyPreview: previewBody(responseText),
+        },
+        'error'
+      );
       return {
         isServiceable: false,
         couriers: [],
@@ -337,6 +411,11 @@ export async function checkShiprocketServiceability(
 
     // Check for errors
     if (data.status_code === 422 || data.errors) {
+      srLog('serviceability.validation_error', {
+        status_code: data.status_code,
+        message: data.message,
+        errors: data.errors,
+      }, 'warn');
       return {
         isServiceable: false,
         couriers: [],
@@ -345,6 +424,11 @@ export async function checkShiprocketServiceability(
     }
 
     if (data.status !== 200 || !data.data?.available_courier_companies || data.data.available_courier_companies.length === 0) {
+      srLog('serviceability.no_couriers', {
+        status: data.status,
+        message: data.message,
+        rawCount: data.data?.available_courier_companies?.length ?? 0,
+      }, 'warn');
       return {
         isServiceable: false,
         couriers: [],
@@ -404,13 +488,24 @@ export async function checkShiprocketServiceability(
     // Get recommended courier ID from response
     const recommendedCourierId = data.data.recommended_courier_company_id || data.data.shiprocket_recommended_courier_id;
 
+    srLog('serviceability.ok', {
+      isServiceable,
+      courierCount: couriers.length,
+      recommendedCourierId,
+      topCouriers: couriers.slice(0, 3).map((c) => ({
+        id: c.courierId,
+        name: c.courierName,
+        days: c.estimatedDays,
+      })),
+    });
+
     return {
       isServiceable,
       couriers,
       recommendedCourierId,
     };
   } catch (error: any) {
-    // Return non-serviceable on error
+    srLog('serviceability.exception', { message: error.message, stack: error.stack }, 'error');
     return {
       isServiceable: false,
       couriers: [],
@@ -471,8 +566,10 @@ async function getShiprocketPickupLocations(): Promise<ShiprocketPickupLocation[
   try {
     const token = await getShiprocketToken();
     const baseUrl = process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external';
+    const url = `${baseUrl}/settings/company/pickup`;
+    srLog('pickup_locations.request', { url });
 
-    const response = await fetch(`${baseUrl}/settings/company/pickup`, {
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -481,18 +578,40 @@ async function getShiprocketPickupLocations(): Promise<ShiprocketPickupLocation[
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      const errorText = await response.text();
+      let errorData: any = {};
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { message: errorText };
+      }
+      srLog('pickup_locations.http_error', {
+        httpStatus: response.status,
+        message: errorData.message,
+        bodyPreview: previewBody(errorText),
+      }, 'error');
       throw new Error(`Failed to fetch pickup locations: ${errorData.message || response.statusText}`);
     }
 
     const data = await response.json();
     
     if (data.data && Array.isArray(data.data)) {
+      srLog('pickup_locations.ok', {
+        count: data.data.length,
+        locations: data.data.map((l: ShiprocketPickupLocation) => ({
+          id: l.id,
+          name: l.pickup_location,
+          pin: l.pin_code,
+          status: l.status,
+        })),
+      });
       return data.data;
     }
     
+    srLog('pickup_locations.empty', { keys: Object.keys(data || {}) }, 'warn');
     return [];
   } catch (error: any) {
+    srLog('pickup_locations.exception', { message: error.message }, 'error');
     throw new Error(`Failed to get pickup locations: ${error.message}`);
   }
 }
@@ -515,6 +634,7 @@ async function findPickupLocationId(warehouseName?: string, warehousePincode?: s
         warehouseName.toLowerCase().includes(loc.pickup_location.toLowerCase())
       );
       if (matchedByName) {
+        srLog('pickup_location.matched_by_name', { warehouseName, id: matchedByName.id, name: matchedByName.pickup_location });
         return matchedByName.id;
       }
     }
@@ -524,6 +644,7 @@ async function findPickupLocationId(warehouseName?: string, warehousePincode?: s
       const cleanPincode = warehousePincode.replace(/\s/g, '').trim();
       const matchedByPincode = locations.find(loc => loc.pin_code === cleanPincode);
       if (matchedByPincode) {
+        srLog('pickup_location.matched_by_pincode', { pincode: cleanPincode, id: matchedByPincode.id });
         return matchedByPincode.id;
       }
     }
@@ -531,13 +652,16 @@ async function findPickupLocationId(warehouseName?: string, warehousePincode?: s
     // Return first active location (status 2 = active)
     const activeLocation = locations.find(loc => loc.status === 2);
     if (activeLocation) {
+      srLog('pickup_location.fallback_active', { id: activeLocation.id, name: activeLocation.pickup_location }, 'warn');
       return activeLocation.id;
     }
 
     // Return first location as fallback
-    return locations[0]?.id || null;
+    const fallbackId = locations[0]?.id || null;
+    srLog('pickup_location.fallback_first', { id: fallbackId }, 'warn');
+    return fallbackId;
   } catch (error: any) {
-    // If we can't get locations, return null and let Shiprocket handle it
+    srLog('pickup_location.resolve_failed', { message: error.message, warehouseName, warehousePincode }, 'error');
     return null;
   }
 }
@@ -791,13 +915,27 @@ export async function createShiprocketOrder(
     }
 
     if (!response.ok) {
+      srLog(
+        'create_order.failed',
+        {
+          httpStatus: response.status,
+          message: responseData.message,
+          errors: responseData.errors,
+          bodyPreview: previewBody(responseText),
+        },
+        'error'
+      );
       // Check if it's a pickup location error
       if (responseData.message?.includes('Wrong Pickup location') && responseData.data?.data) {
         // Try to use the first suggested pickup location
         const suggestedLocations = responseData.data.data as ShiprocketPickupLocation[];
         if (suggestedLocations.length > 0) {
           requestBody.pickup_location = suggestedLocations[0].id;
-          
+          srLog('create_order.retry_pickup_location', {
+            newPickupLocation: suggestedLocations[0].id,
+            suggested: suggestedLocations.map((s) => ({ id: s.id, name: s.pickup_location })),
+          });
+
           // Retry with the correct pickup location
           const retryResponse = await fetch(`${baseUrl}/orders/create/adhoc`, {
             method: 'POST',
@@ -849,6 +987,13 @@ export async function createShiprocketOrder(
       throw new Error('Shiprocket order created but no order_id or shipment_id returned');
     }
 
+    srLog('create_order.success', {
+      shiprocketOrderId: shiprocketResponse.order_id,
+      shipmentId: shiprocketResponse.shipment_id,
+      awbCode: shiprocketResponse.awb_code || null,
+      courierName: shiprocketResponse.courier_name || null,
+    });
+
     return {
       success: true,
       shiprocketOrderId: shiprocketResponse.order_id,
@@ -857,6 +1002,7 @@ export async function createShiprocketOrder(
       courierName: shiprocketResponse.courier_name || '',
     };
   } catch (error: any) {
+    srLog('create_order.exception', { message: error.message, stack: error.stack }, 'error');
     return {
       success: false,
       error: error.message || 'Failed to create Shiprocket order',
@@ -1337,12 +1483,12 @@ export async function requestShiprocketPickup(
   courierName?: string;
   error?: string;
 }> {
-  console.log('[Shiprocket] 🚚 Requesting pickup for shipment:', { shipmentId });
+  srLog('pickup.request_start', { shipmentId });
   
   const enabled = isShiprocketEnabled();
   
   if (!enabled) {
-    console.warn('[Shiprocket] ⚠️ Shiprocket is not enabled');
+    srLog('pickup.skipped', { reason: 'disabled' }, 'warn');
     return {
       success: false,
       error: 'Shiprocket is not enabled',
@@ -1359,11 +1505,11 @@ export async function requestShiprocketPickup(
       shipment_id: [shipmentId], // Array of shipment IDs
     };
 
-    console.log('[Shiprocket] 📤 Pickup request details:', {
+    srLog('pickup.request', {
       url: requestUrl,
       method: 'POST',
-      shipmentId: shipmentId,
-      requestBody: JSON.stringify(requestBody),
+      shipmentId,
+      requestBody,
     });
 
     // Request pickup for the shipment
@@ -1390,20 +1536,23 @@ export async function requestShiprocketPickup(
       throw new Error(`Invalid JSON response from Shiprocket: ${responseText}`);
     }
 
-    // Log full response for debugging
-    console.log('[Shiprocket] 📥 Pickup request response (full):', JSON.stringify(responseData, null, 2));
-    console.log('[Shiprocket] 📊 Pickup response status:', {
+    srLog('pickup.response', {
       httpStatus: response.status,
       ok: response.ok,
-      statusCode: (responseData as any).status_code || (responseData as any).status,
+      statusCode: (responseData as any).status_code ?? (responseData as any).status,
       message: (responseData as any).message,
+      pickup_status: (responseData as any).pickup_status,
       hasData: !!responseData.data,
+      bodyPreview: previewBody(responseText, 1200),
     });
 
     // Handle 404 - Pickup might be automatically scheduled when AWB is assigned
     // or the endpoint might not be available in this API version
     if (response.status === 404) {
-      console.warn('[Shiprocket] ⚠️ Pickup endpoint not found (404). Pickup may be automatically scheduled when AWB is assigned.');
+      srLog('pickup.endpoint_404_soft_success', {
+        shipmentId,
+        note: 'Treating as soft success — verify AWB/pickup in Shiprocket panel',
+      }, 'warn');
       // Return success with estimated pickup date (next business day)
       const pickupDate = new Date();
       pickupDate.setDate(pickupDate.getDate() + 1);
@@ -1419,13 +1568,16 @@ export async function requestShiprocketPickup(
     }
 
     if (!response.ok) {
-      console.error('[Shiprocket] ❌ Pickup request failed:', {
-        httpStatus: response.status,
-        statusCode: (responseData as any).status_code || (responseData as any).status,
-        message: responseData.message,
-        errors: responseData.errors,
-        fullResponse: responseData,
-      });
+      srLog(
+        'pickup.http_error',
+        {
+          httpStatus: response.status,
+          statusCode: (responseData as any).status_code || (responseData as any).status,
+          message: responseData.message,
+          errors: responseData.errors,
+        },
+        'error'
+      );
       return {
         success: false,
         error: responseData.message || 'Failed to request pickup',
@@ -1435,13 +1587,35 @@ export async function requestShiprocketPickup(
     // Check for Shiprocket API errors in response (similar to AWB generation)
     const statusCode = (responseData as any).status_code || (responseData as any).status;
     const errorMessage = (responseData as any).message;
+    const pickupStatus = (responseData as any).pickup_status;
+    
+    if (pickupStatus === 0 || (responseData as any).pickup_generated === 0) {
+      srLog(
+        'pickup.api_rejected',
+        {
+          shipmentId,
+          pickupStatus,
+          message: errorMessage,
+          response: responseData,
+        },
+        'error'
+      );
+      return {
+        success: false,
+        error: errorMessage || 'Shiprocket rejected pickup generation',
+      };
+    }
     
     if (statusCode !== 200 && statusCode !== undefined) {
-      console.error('[Shiprocket] ❌ Pickup request failed (status_code check):', {
-        statusCode,
-        message: errorMessage,
-        fullResponse: responseData,
-      });
+      srLog(
+        'pickup.status_code_error',
+        {
+          statusCode,
+          message: errorMessage,
+          shipmentId,
+        },
+        'error'
+      );
       return {
         success: false,
         error: errorMessage || `Pickup request failed: Status ${statusCode}`,
@@ -1467,12 +1641,12 @@ export async function requestShiprocketPickup(
     // Default pickup time window (usually 10 AM - 6 PM)
     const pickupTime = scheduledTime || '10:00 AM - 6:00 PM';
 
-    console.log('[Shiprocket] ✅ Pickup scheduled successfully:', {
+    srLog('pickup.success', {
       shipmentId,
       pickupDate: pickupDate.toISOString(),
       pickupTime,
       courierName: pickupData.courier_name || pickupData.courierName,
-      responseData: JSON.stringify(pickupData).substring(0, 500),
+      rawPickup: pickupData,
     });
 
     return {
@@ -1482,11 +1656,7 @@ export async function requestShiprocketPickup(
       courierName: pickupData.courier_name || pickupData.courierName,
     };
   } catch (error: any) {
-    console.error('[Shiprocket] ❌ Error requesting pickup:', {
-      shipmentId,
-      error: error.message,
-      stack: error.stack,
-    });
+    srLog('pickup.exception', { shipmentId, message: error.message, stack: error.stack }, 'error');
     return {
       success: false,
       error: error.message || 'Failed to request pickup',
