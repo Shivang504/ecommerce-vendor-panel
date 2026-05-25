@@ -85,7 +85,7 @@ interface Product {
   lowStockThreshold: number;
   allowBackorders: boolean;
   barcode: string;
-  weight: number;
+  weight?: number;
   dimensions: string;
   shippingClass: string;
   processingTime: string;
@@ -165,7 +165,6 @@ const INITIAL_PRODUCT: Product = {
   lowStockThreshold: 10,
   allowBackorders: false,
   barcode: '',
-  weight: 0,
   dimensions: '',
   shippingClass: 'Standard',
   processingTime: '1-2 days',
@@ -202,11 +201,6 @@ const INITIAL_PRODUCT: Product = {
   vendor: 'Main Store',
   warehouseId: '',
   // New pricing and GST fields
-  productCost: 0,
-  forwardLogisticsCost: 0,
-  paymentGatewayCost: 0,
-  expectedLoss: 0,
-  targetProfit: 0,
   basePrice: 0,
   sellingPriceInclGST: 0,
   bankSettlementAmount: 0,
@@ -215,6 +209,36 @@ const INITIAL_PRODUCT: Product = {
   sgst: 0,
   igst: 0,
   vendorState: '',
+};
+
+const OPTIONAL_NUMBER_INPUT_FIELDS = [
+  'productCost',
+  'forwardLogisticsCost',
+  'paymentGatewayCost',
+  'expectedLoss',
+  'targetProfit',
+  'weight',
+] as const;
+
+const parseOptionalNumberInput = (raw: string): number | undefined => {
+  if (raw.trim() === '') return undefined;
+  const parsed = parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const formatOptionalNumberInput = (value: number | undefined): string => {
+  if (value === undefined || value === null || Number.isNaN(value)) return '';
+  return String(value);
+};
+
+const normalizeOptionalNumberFields = <T extends Record<string, unknown>>(data: T): T => {
+  const normalized = { ...data };
+  for (const field of OPTIONAL_NUMBER_INPUT_FIELDS) {
+    if (normalized[field] === 0) {
+      normalized[field] = undefined;
+    }
+  }
+  return normalized;
 };
 
 interface ProductFormPageProps {
@@ -737,7 +761,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         const data = await response.json();
         console.log('[v0] Fetched product data:', data);
 
-        const safeData = {
+        const safeData = normalizeOptionalNumberFields({
           ...INITIAL_PRODUCT,
           ...data,
           tags: Array.isArray(data.tags) ? data.tags : [],
@@ -746,7 +770,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
           attributes: sanitizeAttributeSelections(data.attributes),
           variants: Array.isArray(data.variants) ? data.variants : [],
           specifications: data.specifications || {},
-        };
+        });
 
         console.log('[v0] Safe product data:', safeData);
         setFormData(safeData);
@@ -1887,41 +1911,41 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                             <FormField
                               label='Product Cost (Actual cost that vendor gets)'
                               type='number'
-                              value={formData.productCost || 0}
-                              onChange={e => handleChange('productCost', parseFloat(e.target.value) || 0)}
-                              placeholder='0.00'
+                              value={formatOptionalNumberInput(formData.productCost)}
+                              onChange={e => handleChange('productCost', parseOptionalNumberInput(e.target.value))}
+                              placeholder='Enter amount'
                             />
 
                             <FormField
                               label='Forward Logistics Cost'
                               type='number'
-                              value={formData.forwardLogisticsCost || 0}
-                              onChange={e => handleChange('forwardLogisticsCost', parseFloat(e.target.value) || 0)}
-                              placeholder='0.00'
+                              value={formatOptionalNumberInput(formData.forwardLogisticsCost)}
+                              onChange={e => handleChange('forwardLogisticsCost', parseOptionalNumberInput(e.target.value))}
+                              placeholder='Enter amount'
                             />
 
                             <FormField
                               label='Payment Gateway Cost'
                               type='number'
-                              value={formData.paymentGatewayCost || 0}
-                              onChange={e => handleChange('paymentGatewayCost', parseFloat(e.target.value) || 0)}
-                              placeholder='0.00'
+                              value={formatOptionalNumberInput(formData.paymentGatewayCost)}
+                              onChange={e => handleChange('paymentGatewayCost', parseOptionalNumberInput(e.target.value))}
+                              placeholder='Enter amount'
                             />
 
                             <FormField
                               label='Expected Loss'
                               type='number'
-                              value={formData.expectedLoss || 0}
-                              onChange={e => handleChange('expectedLoss', parseFloat(e.target.value) || 0)}
-                              placeholder='0.00'
+                              value={formatOptionalNumberInput(formData.expectedLoss)}
+                              onChange={e => handleChange('expectedLoss', parseOptionalNumberInput(e.target.value))}
+                              placeholder='Enter amount'
                             />
 
                             <FormField
                               label='Target Profit'
                               type='number'
-                              value={formData.targetProfit || 0}
-                              onChange={e => handleChange('targetProfit', parseFloat(e.target.value) || 0)}
-                              placeholder='0.00'
+                              value={formatOptionalNumberInput(formData.targetProfit)}
+                              onChange={e => handleChange('targetProfit', parseOptionalNumberInput(e.target.value))}
+                              placeholder='Enter amount'
                             />
                           </div>
 
@@ -2693,9 +2717,9 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                         <FormField
                           label='Weight (kg)'
                           type='number'
-                          value={formData.weight}
-                          onChange={e => handleChange('weight', parseFloat(e.target.value) || 0)}
-                          placeholder='0.00'
+                          value={formatOptionalNumberInput(formData.weight)}
+                          onChange={e => handleChange('weight', parseOptionalNumberInput(e.target.value))}
+                          placeholder='Enter weight'
                         />
 
                         <FormField
