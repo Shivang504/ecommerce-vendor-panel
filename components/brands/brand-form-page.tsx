@@ -160,7 +160,7 @@ export function BrandFormPage({ brandId }: BrandFormPageProps) {
           description: `Brand ${brandId ? 'updated' : 'created'} successfully`,
           variant :"success"
         });
-        router.push('/admin/brands');
+        router.push('/supplier/brands');
       } else {
         const error = await response.json();
         toast({
@@ -209,7 +209,7 @@ export function BrandFormPage({ brandId }: BrandFormPageProps) {
           <div className='flex items-center gap-4'>
             <button
               type='button'
-              onClick={() => router.push('/admin/brands')}
+              onClick={() => router.push('/supplier/brands')}
               className='inline-flex items-center justify-center cursor-pointer bg-white p-2 text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200'>
               <ArrowLeft className='h-5 w-5' />
             </button>
@@ -334,7 +334,7 @@ export function BrandFormPage({ brandId }: BrandFormPageProps) {
                 type='button'
                 variant='outline'
                 className='border-slate-200'
-                onClick={() => router.push('/admin/brands')}
+                onClick={() => router.push('/supplier/brands')}
                 disabled={loading}>
                 Cancel
               </Button>

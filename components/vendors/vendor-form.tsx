@@ -304,7 +304,7 @@ export function VendorForm({ vendorId }: VendorFormProps) {
           title: "Success",
           description: vendorId ? 'Vendor updated successfully' : 'Vendor created successfully',
         });
-        router.push('/admin/vendors');
+        router.push('/supplier/vendors');
       } else {
         const error = await response.json();
         toast({
@@ -326,7 +326,7 @@ export function VendorForm({ vendorId }: VendorFormProps) {
   };
 
   const handleCancel = () => {
-    router.push('/admin/vendors');
+    router.push('/supplier/vendors');
   };
 
   const handleDelete = async () => {
@@ -338,7 +338,7 @@ export function VendorForm({ vendorId }: VendorFormProps) {
           title: "Success",
           description: 'Vendor deleted successfully',
         });
-        router.push('/admin/vendors');
+        router.push('/supplier/vendors');
       } else {
         const error = await response.json();
         toast({

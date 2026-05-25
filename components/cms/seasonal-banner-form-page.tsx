@@ -213,7 +213,7 @@ export function SeasonalBannerFormPage({ bannerId }: SeasonalBannerFormPageProps
           description: `Seasonal banner ${bannerId ? 'updated' : 'created'} successfully`,
           variant: 'success',
         });
-        router.push('/admin/cms/seasonal-banners');
+        router.push('/supplier/cms/seasonal-banners');
       } else {
         const error = await response.json();
         toast({

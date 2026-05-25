@@ -153,7 +153,7 @@ export function HeroBannerList() {
     <div className='space-y-6'>
       <div className='flex items-center justify-between'>
         <h1 className='text-3xl font-bold'>Hero Banners</h1>
-        <Button onClick={() => router.push('/admin/cms/hero-banners/add')} className='gap-2 bg-[#22c55e]'>
+        <Button onClick={() => router.push('/supplier/cms/hero-banners/add')} className='gap-2 bg-[#22c55e]'>
           <Plus className='h-4 w-4' />
           Add Hero Banner
         </Button>
@@ -239,7 +239,7 @@ export function HeroBannerList() {
                   <TableCell className='py-4'>
                     <div className='flex justify-end gap-6'>
                       <button
-                        onClick={() => router.push(`/admin/cms/hero-banners/edit/${banner._id}`)}
+                        onClick={() => router.push(`/supplier/cms/hero-banners/edit/${banner._id}`)}
                         title='Edit hero banner'
                         disabled={togglingStatusId === banner._id || deletingId === banner._id}
                         className='text-gray-600 hover:text-gray-900 hover:bg-gray-100 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'>

@@ -255,11 +255,11 @@ export function ProductList() {
   });
 
   const handleAddProduct = () => {
-    router.push('/admin/products/add');
+    router.push('/supplier/products/add');
   };
 
   const handleEditProduct = (product: Product) => {
-    router.push(`/admin/products/edit/${product._id || product.id}`);
+    router.push(`/supplier/products/edit/${product._id || product.id}`);
   };
 
   const handleDeleteClick = (productId: string) => {

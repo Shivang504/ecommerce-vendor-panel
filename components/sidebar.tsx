@@ -20,9 +20,9 @@ export function Sidebar({ onLogout }: SidebarProps) {
   const brandInitials = useMemo(() => brandName.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase(), [brandName]);
 
   const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
-    { icon: Package, label: 'Products', href: '/admin/products' },
-    { icon: Settings, label: 'Settings', href: '/admin/settings' },
+    { icon: LayoutDashboard, label: 'Dashboard', href: '/supplier' },
+    { icon: Package, label: 'Products', href: '/supplier/products' },
+    { icon: Settings, label: 'Settings', href: '/supplier/settings' },
   ];
 
   const isActive = (href: string) => pathname === href;

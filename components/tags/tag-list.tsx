@@ -141,7 +141,7 @@ export function TagList() {
           <h1 className='text-3xl font-bold'>Tags</h1>
           <p className='text-sm text-muted-foreground'>Manage product tags and their details.</p>
         </div>
-        <Button onClick={() => router.push('/admin/tags/add')} className='gap-2'>
+        <Button onClick={() => router.push('/supplier/tags/add')} className='gap-2'>
           <Plus className='h-4 w-4' />
           Add Tag
         </Button>
@@ -192,7 +192,7 @@ export function TagList() {
                 <TableCell className='text-right'>
                   <div className='flex justify-end gap-6'>
                     <button
-                      onClick={() => router.push(`/admin/tags/${tag._id}`)}>
+                      onClick={() => router.push(`/supplier/tags/${tag._id}`)}>
                       <Pencil className='h-5 w-5' />
                     </button>
                     <button

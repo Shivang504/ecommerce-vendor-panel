@@ -105,7 +105,7 @@ export function RoleFormPage({ roleId }: RoleFormPageProps) {
           description: roleId ? 'Role updated successfully' : 'Role created successfully',
           variant:'success'
         });
-        router.push('/admin/roles');
+        router.push('/supplier/roles');
       } else {
         const error = await response.json();
         toast({
@@ -143,7 +143,7 @@ export function RoleFormPage({ roleId }: RoleFormPageProps) {
           <Button
             variant='ghost'
             size='icon'
-            onClick={() => router.push('/admin/roles')}>
+            onClick={() => router.push('/supplier/roles')}>
             <ArrowLeft className='h-4 w-4' />
           </Button>
           <div className='flex items-center gap-2'>
@@ -174,7 +174,7 @@ export function RoleFormPage({ roleId }: RoleFormPageProps) {
             <Button
               type='button'
               variant='outline'
-              onClick={() => router.push('/admin/roles')}
+              onClick={() => router.push('/supplier/roles')}
               disabled={saving}>
               Cancel
             </Button>

@@ -700,7 +700,7 @@ export default function OrderDetailPage() {
         {/* Header */}
         <div className='flex items-center justify-between'>
           <div className='flex items-center gap-4'>
-            <Button variant='outline' size='icon' onClick={() => router.push('/admin/orders')}>
+            <Button variant='outline' size='icon' onClick={() => router.push('/supplier/orders')}>
               <ArrowLeft className='h-4 w-4' />
             </Button>
             <div>

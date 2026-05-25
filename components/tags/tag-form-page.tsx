@@ -128,7 +128,7 @@ export function TagFormPage({ tagId }: TagFormPageProps) {
           description: `Tag ${tagId ? 'updated' : 'created'} successfully`,
           variant : 'success'
         });
-        router.push('/admin/tags');
+        router.push('/supplier/tags');
       } else {
         const error = await response.json();
         toast({
@@ -167,7 +167,7 @@ export function TagFormPage({ tagId }: TagFormPageProps) {
           <div className='flex items-center gap-4'>
             <button
               type='button'
-              onClick={() => router.push('/admin/tags')}
+              onClick={() => router.push('/supplier/tags')}
               className='inline-flex items-center justify-center cursor-pointer bg-white p-2 text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200'>
               <ArrowLeft className='h-5 w-5' />
             </button>
@@ -239,7 +239,7 @@ export function TagFormPage({ tagId }: TagFormPageProps) {
                 type='button'
                 variant='outline'
                 className='border-slate-200'
-                onClick={() => router.push('/admin/tags')}
+                onClick={() => router.push('/supplier/tags')}
                 disabled={loading}>
                 Cancel
               </Button>

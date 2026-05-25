@@ -162,7 +162,7 @@ export function CouponList() {
           <h1 className='text-3xl font-bold'>Coupons</h1>
           <p className='text-sm text-muted-foreground'>Manage discount coupons and promotional codes.</p>
         </div>
-        <Button onClick={() => router.push('/admin/coupons/add')} className='gap-2 bg-[#22c55e] text-white'>
+        <Button onClick={() => router.push('/supplier/coupons/add')} className='gap-2 bg-[#22c55e] text-white'>
           <Plus className='h-4 w-4' />
           Add Coupon
         </Button>
@@ -203,7 +203,7 @@ export function CouponList() {
                 <TableCell className='text-right'>
                   <div className='flex justify-end gap-6'>
                     <button
-                      onClick={() => router.push(`/admin/coupons/${coupon._id}`)}
+                      onClick={() => router.push(`/supplier/coupons/${coupon._id}`)}
                       disabled={togglingStatusId === coupon._id || deletingId === coupon._id}
                       className='text-gray-600 hover:text-gray-900 hover:bg-gray-100 cursor-pointer'>
                       <Pencil className='h-5 w-5' />

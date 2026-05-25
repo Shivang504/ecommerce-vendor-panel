@@ -211,7 +211,7 @@ export function UserList() {
             <Download className='h-4 w-4' />
             Export
           </Button>
-          <Button onClick={() => router.push('/admin/users/add')} className='gap-2 bg-[#22c55e]'>
+          <Button onClick={() => router.push('/supplier/users/add')} className='gap-2 bg-[#22c55e]'>
             <Plus className='h-5 w-5' />
             Add User
           </Button>
@@ -267,7 +267,7 @@ export function UserList() {
                       <div className='flex justify-end gap-6'>
                         {/* View button omitted as per simpler UI */}
                         <button
-                          onClick={() => router.push(`/admin/users/${admin._id}`)}
+                          onClick={() => router.push(`/supplier/users/${admin._id}`)}
                           disabled={togglingStatusId === admin._id || deletingId === admin._id}
                           className='text-gray-600 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed'>
                           <Pencil className='h-5 w-5' />

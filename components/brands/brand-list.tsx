@@ -145,7 +145,7 @@ export function BrandList() {
           <h1 className='text-3xl font-bold'>Brands</h1>
           <p className='text-sm text-muted-foreground'>Manage product brands and their details.</p>
         </div>
-        <Button onClick={() => router.push('/admin/brands/add')} className='gap-2'>
+        <Button onClick={() => router.push('/supplier/brands/add')} className='gap-2'>
           <Plus className='h-4 w-4' />
           Add Brand
         </Button>
@@ -200,7 +200,7 @@ export function BrandList() {
                 <TableCell className='text-right'>
                   <div className='flex justify-end gap-6'>
                     <button
-                      onClick={() => router.push(`/admin/brands/${brand._id}`)}>
+                      onClick={() => router.push(`/supplier/brands/${brand._id}`)}>
                       <Pencil className='h-5 w-5' />
                     </button>
                     <button

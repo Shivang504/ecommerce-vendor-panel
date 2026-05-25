@@ -10,6 +10,12 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith('/admin')) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.replace(/^\/admin/, '/supplier');
+    return NextResponse.redirect(url);
+  }
+
+  if (pathname.startsWith('/supplier')) {
     return NextResponse.next();
   }
 
@@ -17,5 +23,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/login'],
+  matcher: ['/supplier/:path*', '/admin', '/admin/:path*', '/login'],
 };

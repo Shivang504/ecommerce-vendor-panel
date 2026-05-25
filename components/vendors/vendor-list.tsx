@@ -312,7 +312,7 @@ export function VendorList({ initialStatus }: VendorListProps) {
             <Download className='h-4 w-4' />
             Export
           </Button>
-          <Button onClick={() => router.push('/admin/vendors/add')} className='gap-2 bg-[#22c55e]'>
+          <Button onClick={() => router.push('/supplier/vendors/add')} className='gap-2 bg-[#22c55e]'>
             <Plus className='h-5 w-5' />
             Add Vendor
           </Button>
@@ -403,7 +403,7 @@ export function VendorList({ initialStatus }: VendorListProps) {
                             <Eye className='h-5 w-5' />
                           </button>
                           <button
-                            onClick={() => router.push(`/admin/vendors/${vendor._id}/edit`)}
+                            onClick={() => router.push(`/supplier/vendors/${vendor._id}/edit`)}
                             title='Edit vendor'
                             className='text-gray-600 hover:text-gray-900 hover:bg-gray-100'>
                             <Pencil className='h-5 w-5' />

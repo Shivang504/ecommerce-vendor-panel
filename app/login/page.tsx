@@ -61,7 +61,7 @@ export default function LoginPage() {
         }
         console.log('[v0] Redirecting to dashboard');
         setTimeout(() => {
-          window.location.href = '/admin';
+          window.location.href = '/supplier';
         }, 100);
       } else {
         console.log('[v0] No token in response');

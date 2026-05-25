@@ -307,7 +307,7 @@ export function CouponFormPage({ couponId }: CouponFormPageProps) {
           description: couponId ? 'Coupon updated successfully' : 'Coupon created successfully',
           varient: 'success'
         });
-        router.push('/admin/coupons');
+        router.push('/supplier/coupons');
       } else {
         const error = await response.json();
         toast({
@@ -349,7 +349,7 @@ export function CouponFormPage({ couponId }: CouponFormPageProps) {
           <div className='flex items-center gap-4'>
             <button
               type='button'
-              onClick={() => router.push('/admin/coupons')}
+              onClick={() => router.push('/supplier/coupons')}
               className='inline-flex items-center justify-center cursor-pointer bg-white p-2 text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200'>
               <ArrowLeft className='h-5 w-5' />
             </button>
@@ -737,7 +737,7 @@ export function CouponFormPage({ couponId }: CouponFormPageProps) {
                   type='button'
                   variant='outline'
                   className='border-slate-200'
-                  onClick={() => router.push('/admin/coupons')}
+                  onClick={() => router.push('/supplier/coupons')}
                   disabled={saving}>
                   Cancel
                 </Button>

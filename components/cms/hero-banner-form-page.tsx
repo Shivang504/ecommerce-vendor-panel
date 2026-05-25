@@ -176,7 +176,7 @@ export function HeroBannerFormPage({ bannerId }: HeroBannerFormPageProps) {
           description: `Hero banner ${bannerId ? 'updated' : 'created'} successfully`,
           variant: 'success',
         });
-        router.push('/admin/cms/hero-banners');
+        router.push('/supplier/cms/hero-banners');
       } else {
         const error = await response.json();
         toast({

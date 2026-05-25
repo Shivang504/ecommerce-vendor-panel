@@ -185,7 +185,7 @@ export function BlogFormPage({ blogId }: BlogFormPageProps) {
           description: `Blog post ${blogId ? 'updated' : 'created'} successfully`,
           variant: 'success',
         });
-        router.push('/admin/cms/blog');
+        router.push('/supplier/cms/blog');
       } else {
         const error = await response.json();
         toast({

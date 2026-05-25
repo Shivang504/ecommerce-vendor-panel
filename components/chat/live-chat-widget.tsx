@@ -71,7 +71,7 @@ export function LiveChatWidget() {
   const { toast } = useToast();
   
   // Check if admin route after all hooks are declared
-  const isAdmin = pathname.startsWith('/admin');
+  const isAdmin = pathname.startsWith('/supplier');
 
   // Define scrollToBottom before useEffects that use it
   const scrollToBottom = useCallback(() => {

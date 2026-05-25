@@ -213,7 +213,7 @@ export function SubcategoryFormPage({ subcategoryId }: SubcategoryFormPageProps)
           description: `Subcategory ${subcategoryId ? 'updated' : 'created'} successfully`,
           variant: 'success'
         });
-        router.push('/admin/subcategories');
+        router.push('/supplier/subcategories');
       } else {
         const error = await response.json();
         toast({
@@ -249,7 +249,7 @@ export function SubcategoryFormPage({ subcategoryId }: SubcategoryFormPageProps)
           <div className='flex items-center gap-4'>
             <button
               type='button'
-              onClick={() => router.push('/admin/subcategories')}
+              onClick={() => router.push('/supplier/subcategories')}
               className='inline-flex items-center justify-center cursor-pointer bg-white p-2 text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200'>
               <ArrowLeft className='h-5 w-5' />
             </button>
@@ -389,7 +389,7 @@ export function SubcategoryFormPage({ subcategoryId }: SubcategoryFormPageProps)
                 type='button'
                 variant='outline'
                 className='border-slate-200'
-                onClick={() => router.push('/admin/subcategories')}
+                onClick={() => router.push('/supplier/subcategories')}
                 disabled={loading}>
                 Cancel
               </Button>

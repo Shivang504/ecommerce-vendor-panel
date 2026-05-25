@@ -258,7 +258,7 @@ export function ChildCategoryList() {
             <Download className='h-4 w-4' />
             Export
           </Button>
-          <Button onClick={() => router.push('/admin/child-categories/add')} className='gap-2'>
+          <Button onClick={() => router.push('/supplier/child-categories/add')} className='gap-2'>
             <Plus className='h-4 w-4' />
             Add Child Category
           </Button>
@@ -365,7 +365,7 @@ export function ChildCategoryList() {
                         <Eye className='h-5 w-5' />
                       </button>
                       <button
-                        onClick={() => router.push(`/admin/child-categories/edit/${childCategory._id}`)}
+                        onClick={() => router.push(`/supplier/child-categories/edit/${childCategory._id}`)}
                         title='Edit child category'
                         disabled={togglingStatusId === childCategory._id || deletingId === childCategory._id}
                         className='text-gray-600 hover:text-gray-900 hover:bg-gray-100 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'>

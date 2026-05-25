@@ -220,7 +220,7 @@ export function PaymentList() {
                   </TableCell>
                   <TableCell className='text-right'>
                     <button
-                      onClick={() => router.push(`/admin/orders/${payment.orderId}`)}
+                      onClick={() => router.push(`/supplier/orders/${payment.orderId}`)}
                       className='text-gray-600 hover:text-gray-900 hover:bg-gray-100 p-2 rounded transition'>
                       <Eye className='h-5 w-5' />
                     </button>

@@ -30,27 +30,27 @@ const policyConfig = {
   privacy: {
     title: 'Privacy Policy',
     apiPath: '/api/admin/cms/policies/privacy',
-    route: '/admin/cms/privacy-policy',
+    route: '/supplier/cms/privacy-policy',
   },
   terms: {
     title: 'Terms & Conditions',
     apiPath: '/api/admin/cms/policies/terms',
-    route: '/admin/cms/terms-conditions',
+    route: '/supplier/cms/terms-conditions',
   },
   refund: {
     title: 'Refund and Return Policy',
     apiPath: '/api/admin/cms/policies/refund',
-    route: '/admin/cms/refund-return',
+    route: '/supplier/cms/refund-return',
   },
   cancellation: {
     title: 'Cancellation Policy',
     apiPath: '/api/admin/cms/policies/cancellation',
-    route: '/admin/cms/cancellation',
+    route: '/supplier/cms/cancellation',
   },
   shipping: {
     title: 'Shipping Policy',
     apiPath: '/api/admin/cms/policies/shipping',
-    route: '/admin/cms/shipping',
+    route: '/supplier/cms/shipping',
   },
 };
 

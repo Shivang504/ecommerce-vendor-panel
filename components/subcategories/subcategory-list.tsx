@@ -223,7 +223,7 @@ export function SubcategoryList() {
             <Download className='h-4 w-4' />
             Export
           </Button>
-          <Button onClick={() => router.push('/admin/subcategories/add')} className='gap-2'>
+          <Button onClick={() => router.push('/supplier/subcategories/add')} className='gap-2'>
             <Plus className='h-4 w-4' />
             Add Subcategory
           </Button>
@@ -311,7 +311,7 @@ export function SubcategoryList() {
                         <Eye className='h-5 w-5' />
                       </button>
                       <button
-                        onClick={() => router.push(`/admin/subcategories/edit/${subcategory._id}`)}
+                        onClick={() => router.push(`/supplier/subcategories/edit/${subcategory._id}`)}
                         title='Edit subcategory'
                         disabled={togglingStatusId === subcategory._id || deletingId === subcategory._id}
                         className='text-gray-600 hover:text-gray-900 hover:bg-gray-100 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'>

@@ -162,7 +162,7 @@ export function CustomerFormPage({ customerId, isViewMode = false }: CustomerFor
           description: `Customer ${customerId ? 'updated' : 'created'} successfully`,
           variant : "success"
         });
-        router.push('/admin/customers');
+        router.push('/supplier/customers');
       } else {
         const error = await response.json();
         toast({

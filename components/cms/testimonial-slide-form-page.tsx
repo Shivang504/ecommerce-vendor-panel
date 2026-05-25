@@ -196,7 +196,7 @@ export function TestimonialSlideFormPage({ slideId }: TestimonialSlideFormPagePr
           description: `Testimonial slide ${slideId ? 'updated' : 'created'} successfully`,
           variant: 'success',
         });
-        router.push('/admin/cms/testimonial-slides');
+        router.push('/supplier/cms/testimonial-slides');
       } else {
         const error = await response.json();
         toast({

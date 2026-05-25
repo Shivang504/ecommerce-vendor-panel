@@ -228,7 +228,7 @@ export function PromoSectionFormPage({ promoId }: PromoSectionFormPageProps) {
           description: `Promo section ${promoId ? 'updated' : 'created'} successfully`,
           variant: 'success',
         });
-        router.push('/admin/cms/promo-section');
+        router.push('/supplier/cms/promo-section');
       } else {
         const error = await response.json();
         toast({

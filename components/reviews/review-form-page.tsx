@@ -135,7 +135,7 @@ export function ReviewFormPage() {
           description: 'Review created successfully',
           variant: 'success'
         });
-        router.push('/admin/reviews');
+        router.push('/supplier/reviews');
       } else {
         toast({
           title: 'Error',
@@ -162,7 +162,7 @@ export function ReviewFormPage() {
           <div className='flex items-center gap-4'>
             <button
               type='button'
-              onClick={() => router.push('/admin/reviews')}
+              onClick={() => router.push('/supplier/reviews')}
               className='inline-flex items-center justify-center cursor-pointer bg-white p-2 text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200'>
               <ArrowLeft className='h-5 w-5' />
             </button>
@@ -333,7 +333,7 @@ export function ReviewFormPage() {
                 type='button'
                 variant='outline'
                 className='border-slate-200'
-                onClick={() => router.push('/admin/reviews')}
+                onClick={() => router.push('/supplier/reviews')}
                 disabled={submitting}>
                 Cancel
               </Button>

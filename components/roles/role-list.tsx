@@ -118,7 +118,7 @@ export function RoleList() {
             <Download className='h-4 w-4' />
             Export
           </Button>
-          <Button onClick={() => router.push('/admin/roles/add')} className='gap-2 bg-[#22c55e]'>
+          <Button onClick={() => router.push('/supplier/roles/add')} className='gap-2 bg-[#22c55e]'>
             <Plus className='h-4 w-4' />
             Add Role
           </Button>
@@ -158,7 +158,7 @@ export function RoleList() {
                     <TableCell className='py-4'>
                       <div className='flex justify-end gap-6'>
                         <button
-                          onClick={() => router.push(`/admin/roles/${role._id}`)}
+                          onClick={() => router.push(`/supplier/roles/${role._id}`)}
                           title='Edit role'
                           className='text-gray-600 hover:text-gray-900 hover:bg-gray-100 cursor-pointer'>
                           <Pencil className='h-5 w-5' />

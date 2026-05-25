@@ -783,7 +783,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
           description: 'Failed to load product',
           variant: 'destructive',
         });
-        router.push('/admin/products');
+        router.push('/supplier/products');
       }
     } catch (error) {
       console.error('[v0] Failed to fetch product:', error);
@@ -792,7 +792,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         description: 'Failed to load product',
         variant: 'destructive',
       });
-      router.push('/admin/products');
+      router.push('/supplier/products');
     } finally {
       setFetchingProduct(false);
     }
@@ -1011,7 +1011,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
           description: productId ? 'Product updated successfully' : 'Product created successfully',
           variant: 'success',
         });
-        router.push('/admin/products');
+        router.push('/supplier/products');
       } else {
         toast({
           title: 'Error',
@@ -1554,7 +1554,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
           <div className='flex items-center gap-4'>
             <button
               type='button'
-              onClick={() => router.push('/admin/products')}
+              onClick={() => router.push('/supplier/products')}
               className='inline-flex items-center justify-center cursor-pointer bg-white p-2 text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200'>
               <ArrowLeft className='h-5 w-5' />
             </button>
@@ -2311,7 +2311,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                           <Button
                             type='button'
                             className='bg-green-600 hover:bg-green-700 text-white'
-                            onClick={() => router.push('/admin/attributes/add')}>
+                            onClick={() => router.push('/supplier/attributes/add')}>
                             Add Attribute
                           </Button>
                         </div>
@@ -2909,7 +2909,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
               <div className='flex flex-col sm:flex-row gap-3 justify-end pt-4'>
                 <Button
                   type='button'
-                  onClick={() => router.push('/admin/products')}
+                  onClick={() => router.push('/supplier/products')}
                   variant='outline'
                   className='border-slate-200 dark:border-slate-700'>
                   Cancel

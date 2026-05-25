@@ -99,7 +99,7 @@ export function AttributeList() {
           <h1 className='text-3xl font-bold'>Attributes</h1>
           <p className='text-sm text-muted-foreground'>Define attribute sets for product variants.</p>
         </div>
-        <Button className='gap-2 bg-[#22c55e]' onClick={() => router.push('/admin/attributes/add')}>
+        <Button className='gap-2 bg-[#22c55e]' onClick={() => router.push('/supplier/attributes/add')}>
           <Plus className='w-4 h-4' />
           Add Attribute
         </Button>
@@ -148,7 +148,7 @@ export function AttributeList() {
                   <TableCell className='py-4'>
                     <div className='flex justify-end gap-6'>
                       <button
-                        onClick={() => router.push(`/admin/attributes/${attribute._id}`)}
+                        onClick={() => router.push(`/supplier/attributes/${attribute._id}`)}
                         className='text-gray-600 hover:text-gray-900 cursor-pointer'>
                         <Pencil className='h-5 w-5' />
                       </button>

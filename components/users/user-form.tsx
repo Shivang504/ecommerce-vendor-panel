@@ -91,7 +91,7 @@ export function UserForm({ initialData }: { initialData?: UserFormData & { _id?:
         description: initialData ? 'User updated successfully' : 'User created successfully',
       });
 
-      router.push('/admin/users');
+      router.push('/supplier/users');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred';
       setError(message);
@@ -113,7 +113,7 @@ export function UserForm({ initialData }: { initialData?: UserFormData & { _id?:
         <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 flex items-center gap-4">
           <button
             type="button"
-            onClick={() => router.push('/admin/users')}
+            onClick={() => router.push('/supplier/users')}
             className="inline-flex items-center justify-center cursor-pointer bg-white p-2 text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -280,7 +280,7 @@ export function UserForm({ initialData }: { initialData?: UserFormData & { _id?:
                   type="button"
                   variant="outline"
                   className="border-slate-200"
-                  onClick={() => router.push('/admin/users')}
+                  onClick={() => router.push('/supplier/users')}
                   disabled={loading}
                 >
                   Cancel

@@ -5,7 +5,7 @@ import { WebsiteLayout } from './website-layout';
 
 // Routes that should NOT have the website layout (admin, vendor, login pages)
 const EXCLUDED_ROUTES = [
-  '/admin',
+  '/supplier',
   '/vendors',
   '/login',
   '/user-login',

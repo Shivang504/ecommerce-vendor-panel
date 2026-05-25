@@ -150,7 +150,7 @@ export function PromoSectionList() {
       <div className='flex items-center justify-between'>
         <h1 className='text-3xl font-bold'>Promo Section</h1>
         <Button
-          onClick={() => router.push(promo ? `/admin/cms/promo-section/edit/${promo._id}` : '/admin/cms/promo-section/add')}
+          onClick={() => router.push(promo ? `/supplier/cms/promo-section/edit/${promo._id}` : '/supplier/cms/promo-section/add')}
           className='gap-2 bg-[#22c55e]'>
           <Pencil className='h-4 w-4' />
           {promo ? 'Edit Promo Section' : 'Add Promo Section'}

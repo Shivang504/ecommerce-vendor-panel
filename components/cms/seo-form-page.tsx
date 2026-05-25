@@ -139,7 +139,7 @@ export function SeoFormPage() {
           description: 'SEO settings saved successfully',
           variant: 'success',
         });
-        router.push('/admin/cms/seo');
+        router.push('/supplier/cms/seo');
       } else {
         const error = await response.json();
         toast({

@@ -225,7 +225,7 @@ export function CustomerList() {
             <Download className='h-4 w-4' />
             Export CSV
           </Button>
-          <Button onClick={() => router.push('/admin/customers/add')} className='bg-[#22c55e]'>
+          <Button onClick={() => router.push('/supplier/customers/add')} className='bg-[#22c55e]'>
             <Plus className='h-4 w-4 ' />
             Add Customer
           </Button>
@@ -307,7 +307,7 @@ export function CustomerList() {
                             <Eye className='h-5 w-5' />
                           </button>
                           <button
-                            onClick={() => router.push(`/admin/customers/${customer._id}/edit`)}
+                            onClick={() => router.push(`/supplier/customers/${customer._id}/edit`)}
                             title='Edit'
                             disabled={togglingStatusId === customer._id || deletingId === customer._id}
                             className='text-gray-600 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed'>

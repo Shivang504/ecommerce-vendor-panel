@@ -147,7 +147,7 @@ export function QualityBannerList() {
     <div className='space-y-6'>
       <div className='flex items-center justify-between'>
         <h1 className='text-3xl font-bold'>Quality Banners</h1>
-        <Button onClick={() => router.push('/admin/cms/quality-banners/add')} className='gap-2 bg-[#22c55e]'>
+        <Button onClick={() => router.push('/supplier/cms/quality-banners/add')} className='gap-2 bg-[#22c55e]'>
           <Plus className='h-4 w-4' />
           Add Quality Banner
         </Button>
@@ -204,7 +204,7 @@ export function QualityBannerList() {
                   <TableCell className='py-4'>
                     <div className='flex justify-end gap-6'>
                       <button
-                        onClick={() => router.push(`/admin/cms/quality-banners/edit/${banner._id}`)}
+                        onClick={() => router.push(`/supplier/cms/quality-banners/edit/${banner._id}`)}
                         title='Edit quality banner'
                         disabled={togglingStatusId === banner._id || deletingId === banner._id}
                         className='text-gray-600 hover:text-gray-900 hover:bg-gray-100 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'>

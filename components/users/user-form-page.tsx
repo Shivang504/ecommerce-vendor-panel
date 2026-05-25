@@ -149,7 +149,7 @@ export function UserFormPage({ adminId }: UserFormPageProps) {
           description: adminId ? 'User updated successfully' : 'User created successfully',
           variant: 'success'
         });
-        router.push('/admin/users');
+        router.push('/supplier/users');
       } else {
         let message = 'Failed to save user';
         try {
@@ -196,7 +196,7 @@ export function UserFormPage({ adminId }: UserFormPageProps) {
           <div className='flex items-center gap-4'>
             <button
               type='button'
-              onClick={() => router.push('/admin/users')}
+              onClick={() => router.push('/supplier/users')}
               className='inline-flex items-center justify-center cursor-pointer bg-white p-2 text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200'>
               <ArrowLeft className='h-5 w-5' />
             </button>
@@ -311,7 +311,7 @@ export function UserFormPage({ adminId }: UserFormPageProps) {
                 type='button'
                 variant='outline'
                 className='border-slate-200'
-                onClick={() => router.push('/admin/users')}
+                onClick={() => router.push('/supplier/users')}
                 disabled={saving}>
                 Cancel
               </Button>

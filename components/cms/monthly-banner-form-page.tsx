@@ -224,7 +224,7 @@ export function MonthlyBannerFormPage({ bannerId }: MonthlyBannerFormPageProps) 
           description: `Monthly banner ${bannerId ? 'updated' : 'created'} successfully`,
           variant: 'success',
         });
-        router.push('/admin/cms/monthly-banners');
+        router.push('/supplier/cms/monthly-banners');
       } else {
         const error = await response.json();
         toast({

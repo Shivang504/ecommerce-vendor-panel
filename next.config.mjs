@@ -1,5 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  async redirects() {
+    return [
+      {
+        source: '/admin',
+        destination: '/supplier',
+        permanent: true,
+      },
+      {
+        source: '/admin/:path*',
+        destination: '/supplier/:path*',
+        permanent: true,
+      },
+    ];
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },

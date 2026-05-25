@@ -169,7 +169,7 @@ export function QualityBannerFormPage({ bannerId }: QualityBannerFormPageProps) 
           description: `Quality banner ${bannerId ? 'updated' : 'created'} successfully`,
           variant: 'success',
         });
-        router.push('/admin/cms/quality-banners');
+        router.push('/supplier/cms/quality-banners');
       } else {
         const error = await response.json();
         toast({

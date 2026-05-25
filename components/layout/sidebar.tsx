@@ -48,23 +48,23 @@ export function Sidebar() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
-  const [vendorsOpen, setVendorsOpen] = useState(pathname.startsWith('/admin/vendors'));
+  const [vendorsOpen, setVendorsOpen] = useState(pathname.startsWith('/supplier/vendors'));
   const [pendingVendorCount, setPendingVendorCount] = useState(0);
-  const [usersOpen, setUsersOpen] = useState(pathname.startsWith('/admin/users') || pathname.startsWith('/admin/roles'));
+  const [usersOpen, setUsersOpen] = useState(pathname.startsWith('/supplier/users') || pathname.startsWith('/supplier/roles'));
   const [productsOpen, setProductsOpen] = useState(
-    pathname.startsWith('/admin/products') ||
-      pathname.startsWith('/admin/attributes') ||
-      pathname.startsWith('/admin/categories') ||
-      pathname.startsWith('/admin/subcategories') ||
-      pathname.startsWith('/admin/child-categories') ||
-      pathname.startsWith('/admin/brands') ||
-      pathname.startsWith('/admin/tags')
+    pathname.startsWith('/supplier/products') ||
+      pathname.startsWith('/supplier/attributes') ||
+      pathname.startsWith('/supplier/categories') ||
+      pathname.startsWith('/supplier/subcategories') ||
+      pathname.startsWith('/supplier/child-categories') ||
+      pathname.startsWith('/supplier/brands') ||
+      pathname.startsWith('/supplier/tags')
   );
   const [cmsOpen, setCmsOpen] = useState(
-    pathname.startsWith('/admin/cms') ||
-      pathname.startsWith('/admin/banners') ||
-      pathname.startsWith('/admin/policies') ||
-      pathname.startsWith('/admin/blog')
+    pathname.startsWith('/supplier/cms') ||
+      pathname.startsWith('/supplier/banners') ||
+      pathname.startsWith('/supplier/policies') ||
+      pathname.startsWith('/supplier/blog')
   );
   const [userData, setUserData] = useState<{
     name: string;
@@ -141,68 +141,68 @@ export function Sidebar() {
 
   const menuItems = useMemo(
     () => [
-    { label: 'Dashboard', href: '/admin', badge: null, icon: LayoutDashboard, allowedRoles: ['superadmin', 'admin', 'vendor'] },
+    { label: 'Dashboard', href: '/supplier', badge: null, icon: LayoutDashboard, allowedRoles: ['superadmin', 'admin', 'vendor'] },
     {
       label: 'Products',
-      href: '/admin/products',
+      href: '/supplier/products',
       badge: null,
       icon: Package,
       submenu: true,
       type: 'products',
       allowedRoles: ['superadmin', 'admin', 'vendor'],
     },
-    { label: 'Orders', href: '/admin/orders', badge: null, icon: ShoppingCart, allowedRoles: ['superadmin', 'admin', 'vendor'] },
-    { label: 'Wallet', href: '/admin/wallet', badge: null, icon: Wallet, allowedRoles: ['vendor'] },
+    { label: 'Orders', href: '/supplier/orders', badge: null, icon: ShoppingCart, allowedRoles: ['superadmin', 'admin', 'vendor'] },
+    { label: 'Wallet', href: '/supplier/wallet', badge: null, icon: Wallet, allowedRoles: ['vendor'] },
     {
       label: 'Vendor Reports & Analytics',
-      href: '/admin/vendor-reports',
+      href: '/supplier/vendor-reports',
       badge: null,
       icon: BarChart3,
       allowedRoles: ['vendor'],
     },
     {
       label: userData?.role === 'vendor' ? 'Requests to admin' : 'Vendor requests',
-      href: '/admin/vendor-requests',
+      href: '/supplier/vendor-requests',
       badge: null,
       icon: ClipboardList,
       allowedRoles: ['vendor', 'superadmin', 'admin'],
     },
-    { label: 'Payments', href: '/admin/payments', badge: null, icon: CreditCard, allowedRoles: ['superadmin', 'admin'] },
-    { label: 'Warehouses', href: '/admin/warehouses', badge: null, icon: WarehouseIcon, allowedRoles: ['superadmin', 'admin'] },
-    { label: 'Support Tickets', href: '/admin/support/tickets', badge: null, icon: Ticket, allowedRoles: ['superadmin', 'admin'] },
-    { label: 'Live Chat', href: '/admin/chat', badge: null, icon: MessageCircle, allowedRoles: ['superadmin', 'admin'] },
-    { label: 'Coupons', href: '/admin/coupons', badge: null, icon: Ticket, allowedRoles: ['superadmin', 'admin', 'vendor'] },
+    { label: 'Payments', href: '/supplier/payments', badge: null, icon: CreditCard, allowedRoles: ['superadmin', 'admin'] },
+    { label: 'Warehouses', href: '/supplier/warehouses', badge: null, icon: WarehouseIcon, allowedRoles: ['superadmin', 'admin'] },
+    { label: 'Support Tickets', href: '/supplier/support/tickets', badge: null, icon: Ticket, allowedRoles: ['superadmin', 'admin'] },
+    { label: 'Live Chat', href: '/supplier/chat', badge: null, icon: MessageCircle, allowedRoles: ['superadmin', 'admin'] },
+    { label: 'Coupons', href: '/supplier/coupons', badge: null, icon: Ticket, allowedRoles: ['superadmin', 'admin', 'vendor'] },
     {
       label: 'Users',
-      href: '/admin/users',
+      href: '/supplier/users',
       badge: null,
       icon: Users,
       submenu: true,
       type: 'users',
       allowedRoles: ['superadmin', 'admin', 'vendor'],
     },
-    { label: 'Customers', href: '/admin/customers', badge: null, icon: Users, allowedRoles: ['superadmin', 'admin'] },
-    { label: 'Reviews', href: '/admin/reviews', badge: null, icon: Star, allowedRoles: ['superadmin', 'admin', 'vendor'] },
+    { label: 'Customers', href: '/supplier/customers', badge: null, icon: Users, allowedRoles: ['superadmin', 'admin'] },
+    { label: 'Reviews', href: '/supplier/reviews', badge: null, icon: Star, allowedRoles: ['superadmin', 'admin', 'vendor'] },
     {
       label: 'Vendors',
-      href: '/admin/vendors',
+      href: '/supplier/vendors',
       badge: null,
       icon: Store,
       submenu: true,
       type: 'vendors',
       allowedRoles: ['superadmin', 'admin'],
     },
-    { label: 'Withdrawals', href: '/admin/withdrawals', badge: null, icon: Wallet, allowedRoles: ['superadmin', 'admin'] },
+    { label: 'Withdrawals', href: '/supplier/withdrawals', badge: null, icon: Wallet, allowedRoles: ['superadmin', 'admin'] },
     {
       label: 'Reports & Analytics',
-      href: '/admin/seo',
+      href: '/supplier/seo',
       badge: null,
       icon: Search,
       allowedRoles: ['superadmin', 'admin', 'vendor'],
     },
     {
       label: 'CMS',
-      href: '/admin/cms',
+      href: '/supplier/cms',
       badge: null,
       icon: FileText,
       submenu: true,
@@ -211,7 +211,7 @@ export function Sidebar() {
     },
     {
       label: 'Settings',
-      href: '/admin/settings',
+      href: '/supplier/settings',
       badge: null,
       icon: Settings,
       allowedRoles: ['superadmin', 'admin'],
@@ -229,42 +229,42 @@ export function Sidebar() {
   const vendorSubmenu = [
     {
       label: 'Add Vendor',
-      href: '/admin/vendors/add',
+      href: '/supplier/vendors/add',
     },
     {
       label: 'All Vendors',
-      href: '/admin/vendors',
+      href: '/supplier/vendors',
     },
     {
       label: 'Approved',
-      href: '/admin/vendors?status=approved',
+      href: '/supplier/vendors?status=approved',
     },
     {
       label: 'Pending',
-      href: '/admin/vendors?status=pending',
+      href: '/supplier/vendors?status=pending',
     },
     {
       label: 'Rejected',
-      href: '/admin/vendors?status=rejected',
+      href: '/supplier/vendors?status=rejected',
     },
     {
       label: 'Suspended',
-      href: '/admin/vendors?status=suspended',
+      href: '/supplier/vendors?status=suspended',
     },
   ];
 
   const usersSubmenu = [
     {
       label: 'Add User',
-      href: '/admin/users/add',
+      href: '/supplier/users/add',
     },
     {
       label: 'All Users',
-      href: '/admin/users',
+      href: '/supplier/users',
     },
     {
       label: 'Role',
-      href: '/admin/roles',
+      href: '/supplier/roles',
     },
   ];
 
@@ -340,50 +340,50 @@ export function Sidebar() {
   const productsSubmenu = [
     {
       label: 'Add Product',
-      href: '/admin/products/add',
+      href: '/supplier/products/add',
     },
     {
       label: 'All Products',
-      href: '/admin/products',
+      href: '/supplier/products',
     },
     {
       label: 'Attributes',
-      href: '/admin/attributes',
+      href: '/supplier/attributes',
     },
     {
       label: 'Category',
-      href: '/admin/categories',
+      href: '/supplier/categories',
       showPosition: true,
       position: categoryPosition,
       hideForVendor: true,
     },
     {
       label: 'Subcategory',
-      href: '/admin/subcategories',
+      href: '/supplier/subcategories',
       showPosition: true,
       position: subcategoryPosition,
       hideForVendor: true,
     },
     {
       label: 'Child Category',
-      href: '/admin/child-categories',
+      href: '/supplier/child-categories',
       showPosition: true,
       position: childCategoryPosition,
       hideForVendor: true,
     },
     {
       label: 'Position',
-      href: '/admin/positions',
+      href: '/supplier/positions',
       hideForVendor: true,
     },
     {
       label: 'Brand',
-      href: '/admin/brands',
+      href: '/supplier/brands',
       hideForVendor: true,
     },
     {
       label: 'Tag',
-      href: '/admin/tags',
+      href: '/supplier/tags',
       hideForVendor: true,
     },
   ];
@@ -400,59 +400,59 @@ export function Sidebar() {
   const cmsSubmenu = [
     {
       label: 'Hero Banners',
-      href: '/admin/cms/hero-banners',
+      href: '/supplier/cms/hero-banners',
     },
     {
       label: 'Quality Banners',
-      href: '/admin/cms/quality-banners',
+      href: '/supplier/cms/quality-banners',
     },
     {
       label: 'Seasonal Banners',
-      href: '/admin/cms/seasonal-banners',
+      href: '/supplier/cms/seasonal-banners',
     },
     {
       label: 'Monthly Banners',
-      href: '/admin/cms/monthly-banners',
+      href: '/supplier/cms/monthly-banners',
     },
     {
       label: 'Testimonial Slides',
-      href: '/admin/cms/testimonial-slides',
+      href: '/supplier/cms/testimonial-slides',
     },
     {
       label: 'Promo Section',
-      href: '/admin/cms/promo-section',
+      href: '/supplier/cms/promo-section',
     },
     {
       label: 'Privacy Policy',
-      href: '/admin/cms/privacy-policy',
+      href: '/supplier/cms/privacy-policy',
     },
     {
       label: 'Terms & Conditions',
-      href: '/admin/cms/terms-conditions',
+      href: '/supplier/cms/terms-conditions',
     },
     {
       label: 'Refund & Return Policy',
-      href: '/admin/cms/refund-return',
+      href: '/supplier/cms/refund-return',
     },
     {
       label: 'Cancellation Policy',
-      href: '/admin/cms/cancellation',
+      href: '/supplier/cms/cancellation',
     },
     {
       label: 'Shipping Policy',
-      href: '/admin/cms/shipping',
+      href: '/supplier/cms/shipping',
     },
     {
       label: 'Blog',
-      href: '/admin/cms/blog',
+      href: '/supplier/cms/blog',
     },
     {
       label: 'Footer Pages',
-      href: '/admin/cms/footer-pages',
+      href: '/supplier/cms/footer-pages',
     },
     {
       label: 'SEO Settings',
-      href: '/admin/cms/seo',
+      href: '/supplier/cms/seo',
     },
   ];
 
@@ -533,7 +533,7 @@ export function Sidebar() {
 
       <nav className='flex-1 px-3 py-2 space-y-1 overflow-y-auto'>
         {filteredMenuItems.map(item => {
-          const isActive = item.href === '/admin' ? pathname === '/admin' : pathname === item.href || pathname.startsWith(item.href + '/');
+          const isActive = item.href === '/supplier' ? pathname === '/supplier' : pathname === item.href || pathname.startsWith(item.href + '/');
           const IconComponent = item.icon;
 
           if (item.submenu && item.type === 'vendors') {
@@ -547,9 +547,9 @@ export function Sidebar() {
                   }}
                   className={`w-full relative flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 group ${
                     isOpen ? '' : 'justify-center'
-                  } ${pathname.startsWith('/admin/vendors') ? 'text-white font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                  } ${pathname.startsWith('/supplier/vendors') ? 'text-white font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
                   style={
-                    pathname.startsWith('/admin/vendors')
+                    pathname.startsWith('/supplier/vendors')
                       ? {
                           backgroundColor: primaryColor,
                         }
@@ -622,12 +622,12 @@ export function Sidebar() {
                   className={`w-full relative flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 group ${
                     isOpen ? '' : 'justify-center'
                   } ${
-                    pathname.startsWith('/admin/users') || pathname.startsWith('/admin/roles')
+                    pathname.startsWith('/supplier/users') || pathname.startsWith('/supplier/roles')
                       ? 'text-white font-medium'
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
                   style={
-                    pathname.startsWith('/admin/users') || pathname.startsWith('/admin/roles')
+                    pathname.startsWith('/supplier/users') || pathname.startsWith('/supplier/roles')
                       ? {
                           backgroundColor: primaryColor,
                         }
@@ -673,14 +673,14 @@ export function Sidebar() {
 
           if (item.submenu && item.type === 'products') {
             const isProductsActive =
-              pathname.startsWith('/admin/products') ||
-              pathname.startsWith('/admin/attributes') ||
-              pathname.startsWith('/admin/categories') ||
-              pathname.startsWith('/admin/subcategories') ||
-              pathname.startsWith('/admin/child-categories') ||
-              pathname.startsWith('/admin/positions') ||
-              pathname.startsWith('/admin/brands') ||
-              pathname.startsWith('/admin/tags');
+              pathname.startsWith('/supplier/products') ||
+              pathname.startsWith('/supplier/attributes') ||
+              pathname.startsWith('/supplier/categories') ||
+              pathname.startsWith('/supplier/subcategories') ||
+              pathname.startsWith('/supplier/child-categories') ||
+              pathname.startsWith('/supplier/positions') ||
+              pathname.startsWith('/supplier/brands') ||
+              pathname.startsWith('/supplier/tags');
             return (
               <div key={item.href} className='relative'>
                 <button
@@ -711,7 +711,7 @@ export function Sidebar() {
                   <div className='mt-2 space-y-0 relative pl-4'>
                     <div className='absolute left-0 top-0 bottom-0 w-0.5 border-l-2 border-dashed' style={{ borderColor: primaryColor }}></div>
                     {filteredProductsSubmenu.map((subItem, index) => {
-                      const isSubActive = subItem.href === '/admin/products' ? pathname === '/admin/products' : pathname === subItem.href;
+                      const isSubActive = subItem.href === '/supplier/products' ? pathname === '/supplier/products' : pathname === subItem.href;
 
                       return (
                         <Link
@@ -744,10 +744,10 @@ export function Sidebar() {
 
           if (item.submenu && item.type === 'cms') {
             const isCmsActive =
-              pathname.startsWith('/admin/cms') ||
-              pathname.startsWith('/admin/banners') ||
-              pathname.startsWith('/admin/policies') ||
-              pathname.startsWith('/admin/blog');
+              pathname.startsWith('/supplier/cms') ||
+              pathname.startsWith('/supplier/banners') ||
+              pathname.startsWith('/supplier/policies') ||
+              pathname.startsWith('/supplier/blog');
             return (
               <div key={item.href} className='relative'>
                 <button

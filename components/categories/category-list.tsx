@@ -399,7 +399,7 @@ export function CategoryList() {
             <Download className='h-4 w-4' />
             Export
           </Button>
-          <Button onClick={() => router.push('/admin/categories/add')} className='gap-2 bg-[#22c55e] '>
+          <Button onClick={() => router.push('/supplier/categories/add')} className='gap-2 bg-[#22c55e] '>
             <Plus className='h-4 w-4' />
             Add Category
           </Button>
@@ -480,7 +480,7 @@ export function CategoryList() {
                           key={category._id}
                           category={category}
                           onView={handleView}
-                          onEdit={(id) => router.push(`/admin/categories/edit/${id}`)}
+                          onEdit={(id) => router.push(`/supplier/categories/edit/${id}`)}
                           onDelete={(id) => setDeleteId(id)}
                           onToggleStatus={handleToggleStatus}
                           togglingStatusId={togglingStatusId}

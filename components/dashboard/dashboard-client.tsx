@@ -459,7 +459,7 @@ export function DashboardClient() {
               </div>
               <div className='mt-4 flex items-center justify-between border-t border-slate-100 pt-4'>
                 <Button variant='ghost' size='sm' className='text-slate-600' asChild>
-                  <a href='/admin/vendors'>View all vendors</a>
+                  <a href='/supplier/vendors'>View all vendors</a>
                 </Button>
                 <div className='flex gap-1'>
                   <button type='button' className='rounded p-1 hover:bg-slate-100'>
@@ -479,7 +479,7 @@ export function DashboardClient() {
               <div className='mb-4 flex items-center justify-between'>
                 <h3 className='text-base font-bold text-slate-900'>Best selling products</h3>
                 <Button variant='link' className='h-auto p-0 text-sm font-medium text-[#401d5d] hover:text-[#401d5d]/90' asChild>
-                  <a href='/admin/products'>See catalog →</a>
+                  <a href='/supplier/products'>See catalog →</a>
                 </Button>
               </div>
               <div className='space-y-4'>
@@ -524,7 +524,7 @@ export function DashboardClient() {
             <div className='mb-6 flex items-center justify-between'>
               <h3 className='text-base font-bold text-slate-900'>Recent orders</h3>
               <Button variant='outline' size='sm' asChild>
-                <a href='/admin/orders'>Open orders</a>
+                <a href='/supplier/orders'>Open orders</a>
               </Button>
             </div>
 

@@ -147,7 +147,7 @@ export function FooterPageFormPage({ pageId }: FooterPageFormPageProps) {
           description: `Footer page ${pageId ? 'updated' : 'created'} successfully`,
           variant: 'success',
         });
-        router.push('/admin/cms/footer-pages');
+        router.push('/supplier/cms/footer-pages');
       } else {
         const error = await response.json();
         toast({

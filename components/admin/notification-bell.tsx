@@ -221,7 +221,7 @@ export function NotificationBell() {
     // Navigate to order detail page
     if (notification.orderId) {
       setOpen(false);
-      router.push(`/admin/orders/${notification.orderId}`);
+      router.push(`/supplier/orders/${notification.orderId}`);
     }
   };
 
@@ -353,7 +353,7 @@ export function NotificationBell() {
               variant='ghost'
               size='sm'
               className='w-full text-xs'
-              onClick={() => router.push('/admin/orders')}
+              onClick={() => router.push('/supplier/orders')}
             >
               View all orders
             </Button>

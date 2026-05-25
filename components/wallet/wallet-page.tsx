@@ -72,20 +72,20 @@ export function WalletPage() {
             variant: 'destructive',
           });
           setTimeout(() => {
-            router.push('/admin');
+            router.push('/supplier');
           }, 1500);
           setLoading(false);
         }
       } catch (error) {
         console.error('Error parsing adminUser:', error);
         setTimeout(() => {
-          router.push('/admin');
+          router.push('/supplier');
         }, 1500);
         setLoading(false);
       }
     } else {
       setTimeout(() => {
-        router.push('/admin');
+        router.push('/supplier');
       }, 1500);
       setLoading(false);
     }

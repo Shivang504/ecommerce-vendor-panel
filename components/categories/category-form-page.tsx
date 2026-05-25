@@ -288,7 +288,7 @@ export function CategoryFormPage({ categoryId }: CategoryFormPageProps) {
           description: `Category ${categoryId ? 'updated' : 'created'} successfully`,
           variant:'success'
         });
-        router.push('/admin/categories');
+        router.push('/supplier/categories');
       } else {
         const error = await response.json();
         console.error('[v0] Server error:', error);
@@ -319,7 +319,7 @@ export function CategoryFormPage({ categoryId }: CategoryFormPageProps) {
   }
 
   const handleCategorySelect = (selectedId: string) => {
-    router.push(`/admin/categories/${selectedId}`);
+    router.push(`/supplier/categories/${selectedId}`);
   };
 
   const handleCategoryUpdate = () => {
@@ -340,7 +340,7 @@ export function CategoryFormPage({ categoryId }: CategoryFormPageProps) {
       <div className='flex-1 overflow-y-auto p-6'>
         <div className='space-y-6 max-w-4xl'>
           <div className='flex items-center gap-3'>
-            <Button variant='ghost' size='icon' onClick={() => router.push('/admin/categories')}>
+            <Button variant='ghost' size='icon' onClick={() => router.push('/supplier/categories')}>
               <ArrowLeft className='h-5 w-5' />
             </Button>
             <div>
@@ -567,7 +567,7 @@ export function CategoryFormPage({ categoryId }: CategoryFormPageProps) {
             </Card>
 
             <div className='flex justify-end gap-3 mt-5'>
-              <Button type='button' variant='outline' onClick={() => router.push('/admin/categories')} disabled={loading}>
+              <Button type='button' variant='outline' onClick={() => router.push('/supplier/categories')} disabled={loading}>
                 Cancel
               </Button>
               <Button type='submit' disabled={loading} className='bg-primary text-white'>

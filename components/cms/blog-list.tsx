@@ -110,7 +110,7 @@ export function BlogList() {
     <div className='space-y-6'>
       <div className='flex items-center justify-between'>
         <h1 className='text-3xl font-bold'>Blog Posts</h1>
-        <Button onClick={() => router.push('/admin/cms/blog/add')} className='gap-2 bg-[#22c55e]'>
+        <Button onClick={() => router.push('/supplier/cms/blog/add')} className='gap-2 bg-[#22c55e]'>
           <Plus className='h-4 w-4' />
           Add Blog Post
         </Button>
@@ -173,7 +173,7 @@ export function BlogList() {
                   <TableCell className='py-4'>
                     <div className='flex justify-end gap-6'>
                       <button
-                        onClick={() => router.push(`/admin/cms/blog/edit/${blog._id}`)}
+                        onClick={() => router.push(`/supplier/cms/blog/edit/${blog._id}`)}
                         title='Edit blog post'
                         disabled={deletingId === blog._id}
                         className='text-gray-600 hover:text-gray-900 hover:bg-gray-100 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'>

@@ -121,7 +121,7 @@ export function AttributeFormPage({ attributeId }: AttributeFormPageProps) {
           description: attributeId ? 'Attribute updated' : 'Attribute created',
           variant: 'success'
         });
-        router.push('/admin/attributes');
+        router.push('/supplier/attributes');
       } else {
         const error = await response.json();
         toast({
@@ -158,7 +158,7 @@ export function AttributeFormPage({ attributeId }: AttributeFormPageProps) {
           <Button
             variant='ghost'
             size='icon'
-            onClick={() => router.push('/admin/attributes')}
+            onClick={() => router.push('/supplier/attributes')}
             className='border border-slate-200'
           >
             <ArrowLeft className='h-5 w-5' />
@@ -258,7 +258,7 @@ export function AttributeFormPage({ attributeId }: AttributeFormPageProps) {
             <Button
               type='button'
               variant='outline'
-              onClick={() => router.push('/admin/attributes')}
+              onClick={() => router.push('/supplier/attributes')}
               disabled={saving}
             >
               Cancel

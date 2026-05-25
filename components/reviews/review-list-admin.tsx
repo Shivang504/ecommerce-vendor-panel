@@ -142,7 +142,7 @@ export function ReviewListAdmin() {
       {/* Header */}
       <div className='flex items-center justify-between'>
         <h1 className='text-3xl font-bold'>Product Reviews</h1>
-        <Button onClick={() => router.push('/admin/reviews/add')} className='flex items-center gap-2'>
+        <Button onClick={() => router.push('/supplier/reviews/add')} className='flex items-center gap-2'>
           <Plus className='w-5 h-5' />
           Add Review
         </Button>

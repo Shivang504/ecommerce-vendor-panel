@@ -681,7 +681,7 @@ export function VendorFormPage({ vendorId }: VendorFormProps) {
           description: vendorId ? 'Vendor updated successfully' : 'Vendor created successfully',
           variant : 'success'
         });
-        router.push('/admin/vendors');
+        router.push('/supplier/vendors');
       } else {
         const error = await response.json();
         toast({
@@ -728,7 +728,7 @@ export function VendorFormPage({ vendorId }: VendorFormProps) {
           <div className='flex items-center gap-4'>
             <button
               type='button'
-              onClick={() => router.push('/admin/vendors')}
+              onClick={() => router.push('/supplier/vendors')}
               className='inline-flex items-center justify-center cursor-pointer bg-white p-2 text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200'
             >
               <ArrowLeft className='h-5 w-5' />
@@ -1412,7 +1412,7 @@ export function VendorFormPage({ vendorId }: VendorFormProps) {
                   type='button'
                   variant='outline'
                   className='border-slate-200'
-                  onClick={() => router.push('/admin/vendors')}
+                  onClick={() => router.push('/supplier/vendors')}
                   disabled={saving}
                 >
                   Cancel

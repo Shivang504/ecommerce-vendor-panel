@@ -49,8 +49,8 @@ export function TopBar() {
     router.push('/login');
   };
 
-  const handleProfile = () => router.push('/admin/profile');
-  const handleSettings = () => router.push('/admin/settings');
+  const handleProfile = () => router.push('/supplier/profile');
+  const handleSettings = () => router.push('/supplier/settings');
 
   const getInitials = (name: string) =>
     name
@@ -98,50 +98,6 @@ export function TopBar() {
           <NotificationBell />
 
           {/* SETTINGS DROPDOWN PREVIEW */}
-          <SettingsDropdown>
-            <SettingsTrigger asChild>
-              <button className='p-2 hover:bg-gray-100 rounded-lg cursor-pointer'>
-                <Settings size={20} className='text-gray-600' />
-              </button>
-            </SettingsTrigger>
-
-            <SettingsContent align='end' className='w-80 p-0 rounded-xl shadow-xl border border-gray-200 overflow-hidden'>
-              {/* HEADER */}
-              <div className='px-4 py-3 border-b bg-gray-50'>
-                <p className='text-sm font-semibold text-gray-800 flex items-center gap-2'>
-                  <Settings size={16} className='text-gray-500' /> Site Settings
-                </p>
-              </div>
-
-              <div className='p-4 space-y-4'>
-                {/* BASIC INFO */}
-                <div className='space-y-2'>
-                  <Detail label='Website Name' value={siteName} />
-                  <Detail label='Browser Title' value={settings.browserTitle} />
-                  <Detail label='Tagline' value={tagline} />
-                </div>
-
-                {/* COLORS */}
-                <div className='grid grid-cols-2 gap-3'>
-                  <ColorPreview label='Primary Color' value={primaryColor} />
-                  <ColorPreview label='Accent Color' value={accentColor} />
-                </div>
-
-                {/* LOGO & FAVICON */}
-                <div className='grid grid-cols-2 gap-4'>
-                  <ImagePreview label='Logo' src={settings.logo} />
-                  <ImagePreview label='Favicon' src={settings.favicon} />
-                </div>
-
-                {/* FULL SETTINGS BUTTON */}
-                <button
-                  onClick={handleSettings}
-                  className='w-full py-2 mt-1 text-xs font-medium border rounded-lg hover:bg-gray-100 transition'>
-                  Go to Settings
-                </button>
-              </div>
-            </SettingsContent>
-          </SettingsDropdown>
 
           {/* USER DROPDOWN */}
           <DropdownMenu>

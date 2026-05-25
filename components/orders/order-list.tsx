@@ -263,7 +263,7 @@ export function OrderList() {
                     </TableCell>
                     <TableCell className='py-4 text-right'>
                       <button
-                        onClick={() => router.push(`/admin/orders/${order._id}`)}
+                        onClick={() => router.push(`/supplier/orders/${order._id}`)}
                         className='text-gray-600 hover:text-gray-900 hover:bg-gray-100 p-2 rounded transition'>
                         <Eye className='h-5 w-5' />
                       </button>
