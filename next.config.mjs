@@ -10,6 +10,12 @@ const nextConfig = {
     unoptimized: true,
     qualities: [75, 80, 85],
   },
+  serverExternalPackages: ['@sparticuz/chromium', 'puppeteer-core'],
+  experimental: {
+    outputFileTracingIncludes: {
+      '/api/admin/dashboard/export': ['./node_modules/@sparticuz/chromium/**/*'],
+    },
+  },
 }
 
 export default nextConfig

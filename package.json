@@ -9,7 +9,8 @@
     "start": "next start -p 3001",
     "seed:categories": "node scripts/seed-main-categories.js",
     "seed:men": "node scripts/seed-men-categories.js",
-    "fix:positions": "node scripts/fix-category-positions.js"
+    "fix:positions": "node scripts/fix-category-positions.js",
+    "postinstall": "node scripts/install-puppeteer-chrome.mjs"
   },
   "dependencies": {
     "@aws-sdk/credential-providers": "latest",
@@ -67,7 +68,8 @@
     "next-themes": "latest",
     "nodemailer": "^7.0.11",
     "notistack": "^3.0.2",
-    "puppeteer": "^24.34.0",
+    "@sparticuz/chromium": "^148.0.0",
+    "puppeteer-core": "^24.34.0",
     "razorpay": "^2.9.6",
     "react": "^19.2.1",
     "react-day-picker": "latest",
@@ -91,6 +93,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "puppeteer": "^24.34.0",
     "@tailwindcss/postcss": "^4.1.9",
     "@types/node": "^22",
     "@types/react": "^19",

@@ -307,11 +307,8 @@ export function generateDashboardReportHTML(
 }
 
 export async function renderDashboardPdf(html: string): Promise<Buffer> {
-  const puppeteer = await import('puppeteer');
-  const browser = await puppeteer.default.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+  const { launchPuppeteerBrowser } = await import('@/lib/launch-puppeteer-browser');
+  const browser = await launchPuppeteerBrowser();
 
   try {
     const page = await browser.newPage();
