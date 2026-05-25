@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,7 +15,10 @@ import {
   Clock,
   XCircle,
   RotateCcw,
+  Loader2,
 } from 'lucide-react';
+import { canGoToNextMonth, shiftDashboardMonth } from '@/lib/dashboard-month';
+import { toast } from '@/hooks/use-toast';
 import {
   AreaChart,
   Area,
@@ -55,67 +58,137 @@ interface DashboardData {
   topDeals?: Array<{ name: string; category: string; price: string; icon?: string; sales?: number }>;
 }
 
+function getInitialMonth() {
+  const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth() + 1 };
+}
+
 export function DashboardClient() {
   const { settings } = useSettings();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [{ year, month }, setSelectedMonth] = useState(getInitialMonth);
+  const [periodLabel, setPeriodLabel] = useState('This month');
 
   const siteLabel = settings.siteName?.trim() || 'Store';
   const dashboardTitle = `${siteLabel} · Admin`;
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        setLoading(true);
-        const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
-        const response = await fetch('/api/admin/dashboard', {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { Authorization: `Bearer ${token}` }),
-          },
-          credentials: 'include',
-        });
+  const fetchDashboard = useCallback(async (selectedYear: number, selectedMonth: number) => {
+    try {
+      setLoading(true);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
+      const params = new URLSearchParams({
+        year: String(selectedYear),
+        month: String(selectedMonth),
+      });
+      const response = await fetch(`/api/admin/dashboard?${params}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
 
-        if (!response.ok) throw new Error('Failed to fetch dashboard data');
+      if (!response.ok) throw new Error('Failed to fetch dashboard data');
 
-        const dashboardData = await response.json();
+      const dashboardData = await response.json();
 
-        const transformedData: DashboardData = {
-          stats: dashboardData.stats || {
-            totalOrders: { value: '0', change: '0%', trend: 'up' },
-            pendingOrders: { value: '0', change: '0%', trend: 'up' },
-            cancelledOrders: { value: '0', change: '0%', trend: 'up' },
-            returnedItems: { value: '0', change: '0%', trend: 'up' },
-          },
-          revenueData: dashboardData.revenueData || [],
-          categoryDistribution: dashboardData.categoryDistribution || [],
-          topProducts: dashboardData.topProducts || [],
-          recentOrders: dashboardData.recentOrders || [],
-          topDeals: dashboardData.topDeals || [],
-        };
+      const transformedData: DashboardData = {
+        stats: dashboardData.stats || {
+          totalOrders: { value: '0', change: '0%', trend: 'up' },
+          pendingOrders: { value: '0', change: '0%', trend: 'up' },
+          cancelledOrders: { value: '0', change: '0%', trend: 'up' },
+          returnedItems: { value: '0', change: '0%', trend: 'up' },
+        },
+        revenueData: dashboardData.revenueData || [],
+        categoryDistribution: dashboardData.categoryDistribution || [],
+        topProducts: dashboardData.topProducts || [],
+        recentOrders: dashboardData.recentOrders || [],
+        topDeals: dashboardData.topDeals || [],
+      };
 
-        setData(transformedData);
-      } catch (error) {
-        console.error('[Dashboard] Failed to fetch:', error);
-        setData({
-          stats: {
-            totalOrders: { value: '0', change: '0%', trend: 'up' },
-            pendingOrders: { value: '0', change: '0%', trend: 'up' },
-            cancelledOrders: { value: '0', change: '0%', trend: 'up' },
-            returnedItems: { value: '0', change: '0%', trend: 'up' },
-          },
-          revenueData: [],
-          categoryDistribution: [],
-          topProducts: [],
-          recentOrders: [],
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboard();
+      setData(transformedData);
+      setPeriodLabel(dashboardData.period?.label || 'This month');
+    } catch (error) {
+      console.error('[Dashboard] Failed to fetch:', error);
+      setData({
+        stats: {
+          totalOrders: { value: '0', change: '0%', trend: 'up' },
+          pendingOrders: { value: '0', change: '0%', trend: 'up' },
+          cancelledOrders: { value: '0', change: '0%', trend: 'up' },
+          returnedItems: { value: '0', change: '0%', trend: 'up' },
+        },
+        revenueData: [],
+        categoryDistribution: [],
+        topProducts: [],
+        recentOrders: [],
+      });
+      toast({
+        title: 'Could not load dashboard',
+        description: 'Please try again or pick a different month.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchDashboard(year, month);
+  }, [year, month, fetchDashboard]);
+
+  const goToPreviousMonth = () => {
+    setSelectedMonth((prev) => shiftDashboardMonth(prev.year, prev.month, -1));
+  };
+
+  const goToNextMonth = () => {
+    if (!canGoToNextMonth(year, month)) return;
+    setSelectedMonth((prev) => shiftDashboardMonth(prev.year, prev.month, 1));
+  };
+
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
+      const params = new URLSearchParams({ year: String(year), month: String(month) });
+      const response = await fetch(`/api/admin/dashboard/export?${params}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || 'Export failed');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `dashboard-${year}-${String(month).padStart(2, '0')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Export complete',
+        description: `Dashboard report for ${periodLabel} downloaded.`,
+      });
+    } catch (error) {
+      console.error('[Dashboard] Export failed:', error);
+      toast({
+        title: 'Export failed',
+        description: error instanceof Error ? error.message : 'Could not generate PDF.',
+        variant: 'destructive',
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -167,16 +240,39 @@ export function DashboardClient() {
             <p className='mt-1 text-sm text-slate-500'>Orders, revenue, and catalog — aligned with your storefront.</p>
           </div>
           <div className='flex flex-wrap items-center gap-2'>
-            <div className='flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600'>
-              <span>This month</span>
-              <ChevronLeft className='h-4 w-4 opacity-50' />
+            <div className='flex items-center rounded-lg border border-slate-200 bg-white'>
+              <button
+                type='button'
+                onClick={goToPreviousMonth}
+                disabled={loading}
+                className='rounded-l-lg p-2 text-slate-600 transition hover:bg-slate-50 disabled:opacity-50'
+                aria-label='Previous month'>
+                <ChevronLeft className='h-4 w-4' />
+              </button>
+              <span className='min-w-[120px] px-2 text-center text-sm font-medium text-slate-700'>
+                {periodLabel}
+              </span>
+              <button
+                type='button'
+                onClick={goToNextMonth}
+                disabled={loading || !canGoToNextMonth(year, month)}
+                className='rounded-r-lg p-2 text-slate-600 transition hover:bg-slate-50 disabled:opacity-50'
+                aria-label='Next month'>
+                <ChevronRight className='h-4 w-4' />
+              </button>
             </div>
             <button
               type='button'
-              className='inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-95'
+              onClick={handleExport}
+              disabled={exporting || loading || !data}
+              className='inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60'
               style={{ backgroundColor: BRAND_WEB }}>
-              <Download className='h-4 w-4' />
-              Export
+              {exporting ? (
+                <Loader2 className='h-4 w-4 animate-spin' />
+              ) : (
+                <Download className='h-4 w-4' />
+              )}
+              {exporting ? 'Exporting…' : 'Export'}
             </button>
           </div>
         </div>
@@ -329,7 +425,7 @@ export function DashboardClient() {
             <div className='p-6'>
               <div className='mb-4 flex items-center gap-2'>
                 <Store className='h-5 w-5' style={{ color: BRAND_WEB }} />
-                <h3 className='text-base font-bold text-slate-900'>Top vendors (this month)</h3>
+                <h3 className='text-base font-bold text-slate-900'>Top vendors ({periodLabel.toLowerCase()})</h3>
               </div>
               <div className='space-y-3'>
                 <div className='grid grid-cols-12 gap-2 border-b border-slate-200 pb-3 text-xs font-semibold text-slate-500'>
@@ -356,7 +452,9 @@ export function DashboardClient() {
                     </div>
                   ))
                 ) : (
-                  <div className='py-6 text-center text-sm text-slate-500'>No vendor activity this month</div>
+                  <div className='py-6 text-center text-sm text-slate-500'>
+                    No vendor activity for {periodLabel.toLowerCase()}
+                  </div>
                 )}
               </div>
               <div className='mt-4 flex items-center justify-between border-t border-slate-100 pt-4'>

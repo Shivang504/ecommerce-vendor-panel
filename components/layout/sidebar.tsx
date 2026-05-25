@@ -498,7 +498,7 @@ export function Sidebar() {
               {loading ? (
                 <div className='h-4 w-24 bg-gray-200 rounded animate-pulse' />
               ) : (
-                <span className='text-gray-900 font-bold text-base truncate'>{'Ecommerce Supplier'}</span>
+                <span className='text-gray-900 font-bold text-base truncate'>{'E-commerce Supplier'}</span>
               )}{' '}
             </div>
             <button onClick={toggleSidebar} className='p-1.5 rounded-lg hover:bg-gray-50 transition-colors' aria-label='Collapse sidebar'>
