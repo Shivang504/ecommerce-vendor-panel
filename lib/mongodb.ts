@@ -1,5 +1,4 @@
 import { MongoClient, Db } from 'mongodb';
-// Import initialization checks
 import '@/lib/init';
 
 let cachedClient: MongoClient | null = null;
