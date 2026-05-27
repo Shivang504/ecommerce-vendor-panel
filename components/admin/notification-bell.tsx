@@ -34,6 +34,7 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastFetchRef = useRef<number>(0);
+  const prevUnreadRef = useRef<number>(0);
 
   const fetchNotifications = useCallback(async (silent = false) => {
     try {
@@ -71,8 +72,20 @@ export function NotificationBell() {
           notificationsCount: data.notifications?.length || 0,
           unreadCount: data.unreadCount || 0,
         });
+        const newUnread = data.unreadCount || 0;
+        const latest = (data.notifications || [])[0];
+        if (
+          silent &&
+          newUnread > prevUnreadRef.current &&
+          latest?.type === 'order_placed'
+        ) {
+          import('sonner').then(({ toast }) => {
+            toast.success(latest.title, { description: latest.message });
+          });
+        }
+        prevUnreadRef.current = newUnread;
         setNotifications(data.notifications || []);
-        setUnreadCount(data.unreadCount || 0);
+        setUnreadCount(newUnread);
       } else {
         // If 401/403, safeFetch already handled logout, just clear state
         if (response.status === 401 || response.status === 403) {

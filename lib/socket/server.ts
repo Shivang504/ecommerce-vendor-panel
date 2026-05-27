@@ -39,6 +39,13 @@ export function initializeSocket(server: HTTPServer) {
       console.log('[Socket] Admin joined admin room');
     });
 
+    socket.on('join:vendor', (vendorId: string) => {
+      if (vendorId && typeof vendorId === 'string') {
+        socket.join(`vendor:${vendorId}`);
+        console.log(`[Socket] Vendor ${vendorId} joined their room`);
+      }
+    });
+
     // Join order room for specific order updates
     socket.on('join:order', (orderId: string) => {
       socket.join(`order:${orderId}`);
@@ -75,6 +82,20 @@ export function emitNewNotification(notification: any) {
     console.log('[Socket] Emitted new notification to admin');
   } catch (error) {
     // Don't throw - notifications can work without Socket.io
+    console.log('[Socket] Socket.io not available, using polling');
+  }
+}
+
+export function emitNewNotificationToVendor(vendorId: string, notification: any) {
+  try {
+    const socketIO = getSocketIO();
+    if (!socketIO || !vendorId) return;
+    socketIO.to(`vendor:${vendorId}`).emit('notification:new', {
+      notification,
+      timestamp: new Date(),
+    });
+    console.log(`[Socket] Emitted new notification to vendor:${vendorId}`);
+  } catch (error) {
     console.log('[Socket] Socket.io not available, using polling');
   }
 }

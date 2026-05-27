@@ -72,6 +72,17 @@ export async function createNotification(notificationData: Omit<Notification, '_
         }).catch((error) => {
           console.error('[Notification] Error sending push to customer:', error);
         });
+      } else if (notificationData.metadata?.vendorId) {
+        sendPushNotification(notificationData.metadata.vendorId, 'vendor', {
+          title: notificationData.title,
+          message: notificationData.message,
+          orderId: notificationData.orderId?.toString(),
+          orderNumber: notificationData.orderNumber,
+          type: notificationData.type,
+          data: notificationData.metadata,
+        }).catch((error) => {
+          console.error('[Notification] Error sending push to vendor:', error);
+        });
       } else {
         // Send to all admins for admin notifications
         sendPushNotificationToAdmins({

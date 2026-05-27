@@ -57,7 +57,13 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       success: true,
       token,
-      admin: { email: vendor.email, name: vendor.ownerName, role: 'vendor', storeName: vendor.storeName },
+      admin: {
+        id: vendor._id?.toString(),
+        email: vendor.email,
+        name: vendor.ownerName,
+        role: 'vendor',
+        storeName: vendor.storeName,
+      },
     });
 
     response.cookies.set('adminToken', token, {

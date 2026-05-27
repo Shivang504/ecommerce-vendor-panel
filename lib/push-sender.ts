@@ -34,7 +34,7 @@ export interface PushNotificationData {
 // Send push notification to specific user
 export async function sendPushNotification(
   userId: string,
-  userType: 'customer' | 'admin',
+  userType: 'customer' | 'admin' | 'vendor',
   notificationData: PushNotificationData
 ): Promise<{ sent: number; failed: number }> {
   if (!webpush) {

@@ -52,9 +52,11 @@ export default function LoginPage() {
           localStorage.setItem(
             'adminUser',
             JSON.stringify({
+              id: data.admin.id,
               name: data.admin.name,
               email: data.admin.email,
               role: data.admin.role,
+              storeName: data.admin.storeName,
             })
           );
           console.log('[v0] User data stored:', data.admin.name);
