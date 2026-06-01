@@ -10,19 +10,27 @@ export async function GET(request: Request) {
     const status = searchParams.get("status");
     const categoryId = searchParams.get("categoryId");
 
-    const filter: any = {};
+    const andConditions: Record<string, unknown>[] = [];
     if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { slug: { $regex: search, $options: "i" } },
-      ];
+      andConditions.push({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { slug: { $regex: search, $options: "i" } },
+        ],
+      });
     }
     if (status && status !== "all") {
-      filter.status = status;
+      andConditions.push({ status });
     }
     if (categoryId && categoryId !== "all") {
-      filter.categoryId = new ObjectId(categoryId);
+      const categoryMatch: Record<string, unknown>[] = [{ categoryId }];
+      if (ObjectId.isValid(categoryId)) {
+        categoryMatch.push({ categoryId: new ObjectId(categoryId) });
+      }
+      andConditions.push({ $or: categoryMatch });
     }
+    const filter: Record<string, unknown> =
+      andConditions.length > 0 ? { $and: andConditions } : {};
 
     const subcategories = await db
       .collection("subcategories")

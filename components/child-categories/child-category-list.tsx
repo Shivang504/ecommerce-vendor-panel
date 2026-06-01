@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -65,7 +65,9 @@ export function ChildCategoryList() {
 
   useEffect(() => {
     fetchCategories();
-    fetchSubcategories();
+  }, []);
+
+  useEffect(() => {
     fetchChildCategories();
   }, [searchTerm, statusFilter, categoryFilter, subcategoryFilter]);
 
@@ -76,6 +78,11 @@ export function ChildCategoryList() {
       fetchSubcategories();
     }
   }, [categoryFilter]);
+
+  const visibleSubcategories = useMemo(() => {
+    if (categoryFilter === 'all') return subcategories;
+    return subcategories.filter(sub => String(sub.categoryId ?? '') === String(categoryFilter));
+  }, [subcategories, categoryFilter]);
 
   const fetchCategories = async () => {
     try {
@@ -309,7 +316,7 @@ export function ChildCategoryList() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value='all'>All Subcategories</SelectItem>
-              {subcategories.map(sub => (
+              {visibleSubcategories.map(sub => (
                 <SelectItem key={sub._id} value={sub._id}>
                   {sub.name}
                 </SelectItem>
