@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { sanitizeValueImages } from '@/lib/attribute-images';
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,12 +35,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name and style are required' }, { status: 400 });
     }
 
-    const values = Array.isArray(body.values) ? body.values.map((v: string) => String(v).trim()).filter(Boolean) : [];
     const attribute = {
       name: body.name.trim(),
       style: body.style,
-      values,
-      valueImages: sanitizeValueImages(values, body.valueImages),
+      values: Array.isArray(body.values) ? body.values : [],
       description: body.description || '',
       createdAt: new Date(),
     };

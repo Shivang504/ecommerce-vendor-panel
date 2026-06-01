@@ -30,7 +30,7 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { cn, getPlainTextFromHtml } from '@/lib/utils';
 import { useSettings } from '@/components/settings/settings-provider';
 import { AttributeSelectionMap, sanitizeAttributeSelections } from '@/lib/product-attributes';
-import { getValueImage, isColorAttribute } from '@/lib/attribute-images';
+import { isColorAttribute } from '@/lib/attribute-images';
 
 const PRODUCT_TYPE_OPTIONS = [
   { label: 'Physical Product', value: 'Physical Product' },
@@ -62,7 +62,6 @@ interface AttributeOption {
   name: string;
   style?: string;
   values: string[];
-  valueImages?: Record<string, string>;
 }
 
 interface Product {
@@ -2423,29 +2422,17 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                                       {attribute.values.map(value => {
                                         const trimmedValue = value.trim();
                                         const selected = isAttributeValueSelected(attribute._id, trimmedValue);
-                                        const swatchImage =
-                                          isColorAttribute(attribute.name, attribute.style) &&
-                                          getValueImage(attribute.valueImages, trimmedValue);
                                         return (
                                           <button
                                             type='button'
                                             key={`${attribute._id}-${trimmedValue}`}
                                             onClick={() => handleAttributeValueToggle(attribute._id, trimmedValue)}
                                             className={cn(
-                                              'inline-flex items-center gap-2 border text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-500',
-                                              swatchImage ? 'rounded-full pl-1 pr-4 py-1' : 'px-4 py-2 rounded-full',
+                                              'px-4 py-2 rounded-full border text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-500',
                                               selected
                                                 ? 'bg-green-600 text-white border-green-600 shadow-sm'
                                                 : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-green-400 hover:text-green-600'
                                             )}>
-                                            {swatchImage ? (
-                                              // eslint-disable-next-line @next/next/no-img-element
-                                              <img
-                                                src={swatchImage}
-                                                alt={trimmedValue}
-                                                className='h-8 w-8 rounded-full object-cover border border-white/30'
-                                              />
-                                            ) : null}
                                             {value}
                                           </button>
                                         );
@@ -2465,16 +2452,15 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                       {selectedColorValues.length > 0 && colorAttributeOption && (
                         <div className='mt-8 rounded-xl border border-purple-200 bg-purple-50/50 dark:border-purple-900 dark:bg-purple-950/20 p-5 space-y-4'>
                           <div>
-                            <h3 className='text-lg font-semibold text-slate-900 dark:text-white'>Color images</h3>
+                            <h3 className='text-lg font-semibold text-slate-900 dark:text-white'>Color images (this product)</h3>
                             <p className='text-sm text-slate-500 dark:text-slate-400 mt-1'>
-                              Upload one image per color. It applies to all size/fit combinations for that color and changes the main
-                              product photo on the website when the customer selects that color.
+                              Upload the product photo for each color. On the website, when the customer taps a color, the main image
+                              slider will show this photo.
                             </p>
                           </div>
                           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
                             {selectedColorValues.map(color => {
-                              const preview =
-                                getVariantImageForColor(color) || getValueImage(colorAttributeOption.valueImages, color);
+                              const preview = getVariantImageForColor(color);
                               return (
                                 <div
                                   key={color}
@@ -2548,26 +2534,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                                     <div className='mb-3'>
                                       <p className='font-medium text-slate-900 dark:text-white text-sm'>{combinationLabel}</p>
                                     </div>
-                                    <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
-                                      {colorAttributeOption?.name &&
-                                        combination[colorAttributeOption.name] && (
-                                          <div className='md:col-span-2 lg:col-span-4 flex items-center gap-3 pb-1 border-b border-slate-200 dark:border-slate-700 mb-1'>
-                                            <span className='text-xs font-medium text-slate-600'>Color image:</span>
-                                            {variant?.image ? (
-                                              // eslint-disable-next-line @next/next/no-img-element
-                                              <img
-                                                src={variant.image}
-                                                alt=''
-                                                className='h-10 w-10 rounded object-cover border'
-                                              />
-                                            ) : (
-                                              <span className='text-xs text-amber-600'>
-                                                Upload above in &quot;Color images&quot; for{' '}
-                                                {combination[colorAttributeOption.name]}
-                                              </span>
-                                            )}
-                                          </div>
-                                        )}
+                                    <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
                                       <div>
                                         <label className='block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1'>
                                           Price (₹)
