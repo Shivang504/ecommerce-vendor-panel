@@ -1461,8 +1461,12 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     return existingVariants.find(v => JSON.stringify(v.attributeCombination) === combinationKey);
   };
 
-  // Update variant price/stock
-  const updateVariant = (combination: Record<string, string>, field: 'price' | 'stock' | 'sku', value: number | string) => {
+  // Update variant price/stock/sku/image
+  const updateVariant = (
+    combination: Record<string, string>,
+    field: 'price' | 'stock' | 'sku' | 'image',
+    value: number | string
+  ) => {
     const existingVariants = [...(formData.variants || [])];
     const combinationKey = JSON.stringify(combination);
     const existingIndex = existingVariants.findIndex(v => JSON.stringify(v.attributeCombination) === combinationKey);
@@ -1482,6 +1486,60 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     }
 
     handleChange('variants', existingVariants);
+  };
+
+  const colorAttributeOption = useMemo(
+    () => attributeOptions.find(attr => isColorAttribute(attr.name, attr.style)),
+    [attributeOptions]
+  );
+
+  const selectedColorValues = useMemo(() => {
+    if (!colorAttributeOption?._id) return [] as string[];
+    const values = formData.attributes?.[colorAttributeOption._id];
+    return Array.isArray(values) ? values.map(v => v.trim()).filter(Boolean) : [];
+  }, [colorAttributeOption, formData.attributes]);
+
+  const [uploadingColorImage, setUploadingColorImage] = useState<string | null>(null);
+
+  const getVariantImageForColor = (color: string): string | undefined => {
+    if (!colorAttributeOption?.name) return undefined;
+    const match = (formData.variants || []).find(
+      v => v.attributeCombination[colorAttributeOption.name] === color && v.image?.trim()
+    );
+    return match?.image?.trim();
+  };
+
+  const setImageForAllVariantsOfColor = (color: string, imageUrl: string) => {
+    if (!colorAttributeOption?.name) return;
+    const colorKey = colorAttributeOption.name;
+    const existingVariants = [...(formData.variants || [])];
+    const updated = existingVariants.map(v =>
+      v.attributeCombination[colorKey] === color ? { ...v, image: imageUrl } : v
+    );
+    handleChange('variants', updated);
+  };
+
+  const uploadColorVariantImage = async (color: string, file: File) => {
+    setUploadingColorImage(color);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const response = await fetch('/api/upload', { method: 'POST', body });
+      const data = await response.json();
+      if (!response.ok || !data.url) {
+        throw new Error(data.error || 'Upload failed');
+      }
+      setImageForAllVariantsOfColor(color, data.url);
+      toast({ title: 'Image saved', description: `Image set for color "${color}"` });
+    } catch (error) {
+      toast({
+        title: 'Upload failed',
+        description: error instanceof Error ? error.message : 'Could not upload image',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingColorImage(null);
+    }
   };
 
   // Auto-generate variants when attributes change
@@ -2403,6 +2461,67 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                         </div>
                       )}
 
+                      {/* Color variant images (shown on storefront when customer picks a color) */}
+                      {selectedColorValues.length > 0 && colorAttributeOption && (
+                        <div className='mt-8 rounded-xl border border-purple-200 bg-purple-50/50 dark:border-purple-900 dark:bg-purple-950/20 p-5 space-y-4'>
+                          <div>
+                            <h3 className='text-lg font-semibold text-slate-900 dark:text-white'>Color images</h3>
+                            <p className='text-sm text-slate-500 dark:text-slate-400 mt-1'>
+                              Upload one image per color. It applies to all size/fit combinations for that color and changes the main
+                              product photo on the website when the customer selects that color.
+                            </p>
+                          </div>
+                          <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
+                            {selectedColorValues.map(color => {
+                              const preview =
+                                getVariantImageForColor(color) || getValueImage(colorAttributeOption.valueImages, color);
+                              return (
+                                <div
+                                  key={color}
+                                  className='flex items-center gap-3 rounded-lg border border-slate-200 bg-white dark:bg-slate-900 p-3'>
+                                  <label className='relative flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-slate-300 bg-slate-50'>
+                                    {preview ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={preview} alt={color} className='h-full w-full object-cover' />
+                                    ) : (
+                                      <ImageIcon className='h-6 w-6 text-slate-400' />
+                                    )}
+                                    <input
+                                      type='file'
+                                      accept='image/*'
+                                      className='absolute inset-0 cursor-pointer opacity-0'
+                                      disabled={uploadingColorImage === color}
+                                      onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        if (file) void uploadColorVariantImage(color, file);
+                                        e.target.value = '';
+                                      }}
+                                    />
+                                    {uploadingColorImage === color && (
+                                      <span className='absolute inset-0 flex items-center justify-center bg-white/80'>
+                                        <Loader2 className='h-5 w-5 animate-spin text-primary' />
+                                      </span>
+                                    )}
+                                  </label>
+                                  <div className='min-w-0 flex-1'>
+                                    <p className='font-medium text-slate-900 dark:text-white'>{color}</p>
+                                    <p className='text-xs text-slate-500'>Click image to upload</p>
+                                    {preview && (
+                                      <button
+                                        type='button'
+                                        className='mt-1 text-xs text-red-600 hover:underline'
+                                        onClick={() => setImageForAllVariantsOfColor(color, '')}>
+                                        Remove
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Variant Pricing & Stock */}
                       {generateAttributeCombinations().length > 0 && (
                         <div className='mt-8 space-y-6'>
@@ -2429,7 +2548,26 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                                     <div className='mb-3'>
                                       <p className='font-medium text-slate-900 dark:text-white text-sm'>{combinationLabel}</p>
                                     </div>
-                                    <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+                                    <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
+                                      {colorAttributeOption?.name &&
+                                        combination[colorAttributeOption.name] && (
+                                          <div className='md:col-span-2 lg:col-span-4 flex items-center gap-3 pb-1 border-b border-slate-200 dark:border-slate-700 mb-1'>
+                                            <span className='text-xs font-medium text-slate-600'>Color image:</span>
+                                            {variant?.image ? (
+                                              // eslint-disable-next-line @next/next/no-img-element
+                                              <img
+                                                src={variant.image}
+                                                alt=''
+                                                className='h-10 w-10 rounded object-cover border'
+                                              />
+                                            ) : (
+                                              <span className='text-xs text-amber-600'>
+                                                Upload above in &quot;Color images&quot; for{' '}
+                                                {combination[colorAttributeOption.name]}
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
                                       <div>
                                         <label className='block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1'>
                                           Price (₹)
