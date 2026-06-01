@@ -30,6 +30,7 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { cn, getPlainTextFromHtml } from '@/lib/utils';
 import { useSettings } from '@/components/settings/settings-provider';
 import { AttributeSelectionMap, sanitizeAttributeSelections } from '@/lib/product-attributes';
+import { getValueImage, isColorAttribute } from '@/lib/attribute-images';
 
 const PRODUCT_TYPE_OPTIONS = [
   { label: 'Physical Product', value: 'Physical Product' },
@@ -61,6 +62,7 @@ interface AttributeOption {
   name: string;
   style?: string;
   values: string[];
+  valueImages?: Record<string, string>;
 }
 
 interface Product {
@@ -2363,17 +2365,29 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                                       {attribute.values.map(value => {
                                         const trimmedValue = value.trim();
                                         const selected = isAttributeValueSelected(attribute._id, trimmedValue);
+                                        const swatchImage =
+                                          isColorAttribute(attribute.name, attribute.style) &&
+                                          getValueImage(attribute.valueImages, trimmedValue);
                                         return (
                                           <button
                                             type='button'
                                             key={`${attribute._id}-${trimmedValue}`}
                                             onClick={() => handleAttributeValueToggle(attribute._id, trimmedValue)}
                                             className={cn(
-                                              'px-4 py-2 rounded-full border text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-500',
+                                              'inline-flex items-center gap-2 border text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-500',
+                                              swatchImage ? 'rounded-full pl-1 pr-4 py-1' : 'px-4 py-2 rounded-full',
                                               selected
                                                 ? 'bg-green-600 text-white border-green-600 shadow-sm'
                                                 : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-green-400 hover:text-green-600'
                                             )}>
+                                            {swatchImage ? (
+                                              // eslint-disable-next-line @next/next/no-img-element
+                                              <img
+                                                src={swatchImage}
+                                                alt={trimmedValue}
+                                                className='h-8 w-8 rounded-full object-cover border border-white/30'
+                                              />
+                                            ) : null}
                                             {value}
                                           </button>
                                         );

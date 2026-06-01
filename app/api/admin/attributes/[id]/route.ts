@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { sanitizeValueImages } from '@/lib/attribute-images';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -32,10 +33,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Name and style are required' }, { status: 400 });
     }
 
+    const values = Array.isArray(body.values) ? body.values.map((v: string) => String(v).trim()).filter(Boolean) : [];
     const updateData = {
       name: body.name.trim(),
       style: body.style,
-      values: Array.isArray(body.values) ? body.values : [],
+      values,
+      valueImages: sanitizeValueImages(values, body.valueImages),
       description: body.description || '',
       updatedAt: new Date(),
     };

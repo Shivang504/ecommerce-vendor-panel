@@ -110,6 +110,92 @@ function formatPhoneForShiprocket(phone: string): string {
   return cleaned;
 }
 
+function isPlaceholderAddressField(value?: string): boolean {
+  if (!value?.trim()) return true;
+  const v = value.trim().toLowerCase();
+  return v === 'unknown' || v === 'n/a' || v === 'na' || v === '-' || v === 'null';
+}
+
+/** Resolve city/state from admin pincode DB or India Post directory (fixes Shiprocket "international" misclassification). */
+async function resolveIndianCityStateFromPincode(
+  pincode: string
+): Promise<{ city: string; state: string } | null> {
+  const clean = pincode.replace(/\D/g, '').trim();
+  if (!/^\d{6}$/.test(clean)) return null;
+
+  try {
+    const { checkPincodeServiceability } = await import('@/lib/models/pincode');
+    const fromDb = await checkPincodeServiceability(clean);
+    if (
+      fromDb?.city &&
+      fromDb?.state &&
+      !isPlaceholderAddressField(fromDb.city) &&
+      !isPlaceholderAddressField(fromDb.state)
+    ) {
+      return { city: fromDb.city.trim(), state: fromDb.state.trim() };
+    }
+  } catch {
+    // continue to public PIN API
+  }
+
+  try {
+    const res = await fetch(`https://api.postalpincode.in/pincode/${clean}`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const raw = await res.json();
+    const root = Array.isArray(raw) ? raw[0] : raw;
+    const po = root?.PostOffice?.[0];
+    if (!po || root?.Status !== 'Success') return null;
+    const state = String(po.State ?? '').trim();
+    const city = String(po.District ?? po.Name ?? '').trim();
+    if (!state || !city) return null;
+    return { city, state };
+  } catch {
+    return null;
+  }
+}
+
+async function normalizeAddressForShiprocket(address: {
+  city?: string;
+  state?: string;
+  country?: string;
+  postalCode?: string;
+}): Promise<{ city: string; state: string; country: string }> {
+  const pincode = address.postalCode?.replace(/\D/g, '').trim() || '';
+  let city = address.city?.trim() || '';
+  let state = address.state?.trim() || '';
+  let country = address.country?.trim() || '';
+
+  if (isPlaceholderAddressField(country) || /^in(dia)?$/i.test(country)) {
+    country = 'India';
+  }
+
+  if (isPlaceholderAddressField(city) || isPlaceholderAddressField(state)) {
+    const resolved = await resolveIndianCityStateFromPincode(pincode);
+    if (resolved) {
+      if (isPlaceholderAddressField(city)) city = resolved.city;
+      if (isPlaceholderAddressField(state)) state = resolved.state;
+      srLog('address.resolved_from_pincode', { pincode, city, state });
+    }
+  }
+
+  return { city, state, country };
+}
+
+function extractPickupLocationsFromResponse(data: Record<string, unknown>): ShiprocketPickupLocation[] {
+  const payload = data?.data;
+  if (Array.isArray(payload)) return payload as ShiprocketPickupLocation[];
+  if (payload && typeof payload === 'object') {
+    const obj = payload as Record<string, unknown>;
+    for (const key of ['shipping_address', 'pickup_locations', 'pickup_location', 'addresses']) {
+      const list = obj[key];
+      if (Array.isArray(list)) return list as ShiprocketPickupLocation[];
+    }
+  }
+  return [];
+}
+
 /**
  * Get Shiprocket authentication token
  * Token is cached for 24 hours
@@ -594,21 +680,26 @@ async function getShiprocketPickupLocations(): Promise<ShiprocketPickupLocation[
     }
 
     const data = await response.json();
-    
-    if (data.data && Array.isArray(data.data)) {
+    const locations = extractPickupLocationsFromResponse(data);
+
+    if (locations.length > 0) {
       srLog('pickup_locations.ok', {
-        count: data.data.length,
-        locations: data.data.map((l: ShiprocketPickupLocation) => ({
+        count: locations.length,
+        locations: locations.map((l: ShiprocketPickupLocation) => ({
           id: l.id,
           name: l.pickup_location,
           pin: l.pin_code,
           status: l.status,
         })),
       });
-      return data.data;
+      return locations;
     }
-    
-    srLog('pickup_locations.empty', { keys: Object.keys(data || {}) }, 'warn');
+
+    srLog('pickup_locations.empty', {
+      keys: Object.keys(data || {}),
+      dataType: typeof data?.data,
+      dataKeys: data?.data && typeof data.data === 'object' ? Object.keys(data.data) : [],
+    }, 'warn');
     return [];
   } catch (error: any) {
     srLog('pickup_locations.exception', { message: error.message }, 'error');
@@ -828,6 +919,37 @@ export async function createShiprocketOrder(
     const orderDate = new Date(orderData.orderDate);
     const formattedOrderDate = orderDate.toISOString().replace('T', ' ').substring(0, 16);
 
+    const billingNorm = await normalizeAddressForShiprocket({
+      city: orderData.billingAddress.city,
+      state: orderData.billingAddress.state,
+      country: orderData.billingAddress.country,
+      postalCode: orderData.billingAddress.postalCode,
+    });
+    const shippingNorm = await normalizeAddressForShiprocket({
+      city: orderData.shippingAddress.city,
+      state: orderData.shippingAddress.state,
+      country: orderData.shippingAddress.country,
+      postalCode: orderData.shippingAddress.postalCode,
+    });
+
+    if (
+      isPlaceholderAddressField(orderData.billingAddress.city) ||
+      isPlaceholderAddressField(orderData.billingAddress.state) ||
+      isPlaceholderAddressField(orderData.shippingAddress.city) ||
+      isPlaceholderAddressField(orderData.shippingAddress.state)
+    ) {
+      srLog('address.normalized_for_shiprocket', {
+        orderNumber: orderData.orderNumber,
+        before: {
+          billingCity: orderData.billingAddress.city,
+          billingState: orderData.billingAddress.state,
+          shippingCity: orderData.shippingAddress.city,
+          shippingState: orderData.shippingAddress.state,
+        },
+        after: { billingNorm, shippingNorm },
+      });
+    }
+
     // Build request body
     const requestBody: any = {
       order_id: orderData.orderNumber, // Use our order number as Shiprocket order_id
@@ -836,10 +958,10 @@ export async function createShiprocketOrder(
       billing_last_name: orderData.billingAddress.name.split(' ').slice(1).join(' ') || '',
       billing_address: orderData.billingAddress.street,
       billing_address_2: (orderData.billingAddress as any).landmark || '',
-      billing_city: orderData.billingAddress.city,
+      billing_city: billingNorm.city,
       billing_pincode: orderData.billingAddress.postalCode.replace(/\s/g, '').trim(),
-      billing_state: orderData.billingAddress.state,
-      billing_country: orderData.billingAddress.country || 'India',
+      billing_state: billingNorm.state,
+      billing_country: billingNorm.country,
       billing_email: orderData.billingAddress.email,
       billing_phone: formatPhoneForShiprocket(orderData.billingAddress.phone),
       shipping_is_billing: shippingIsBilling,
@@ -858,10 +980,10 @@ export async function createShiprocketOrder(
     requestBody.shipping_last_name = orderData.shippingAddress.name.split(' ').slice(1).join(' ') || '';
     requestBody.shipping_address = orderData.shippingAddress.street;
     requestBody.shipping_address_2 = (orderData.shippingAddress as any).landmark || '';
-    requestBody.shipping_city = orderData.shippingAddress.city;
+    requestBody.shipping_city = shippingNorm.city;
     requestBody.shipping_pincode = orderData.shippingAddress.postalCode.replace(/\s/g, '').trim();
-    requestBody.shipping_state = orderData.shippingAddress.state;
-    requestBody.shipping_country = orderData.shippingAddress.country || 'India';
+    requestBody.shipping_state = shippingNorm.state;
+    requestBody.shipping_country = shippingNorm.country;
     // Use shipping email or fall back to billing email
     requestBody.shipping_email = orderData.shippingAddress.email || orderData.billingAddress.email;
     requestBody.shipping_phone = formatPhoneForShiprocket(orderData.shippingAddress.phone);
@@ -871,12 +993,34 @@ export async function createShiprocketOrder(
       requestBody.cod_amount = orderData.pricing.total;
     }
 
-    // Add pickup location ID if found
+    // Pickup location: prefer Shiprocket ID; name string only if it matches a registered pickup
     if (pickupLocationId) {
       requestBody.pickup_location = pickupLocationId;
-    } else if (warehouse?.name) {
-      // Fallback to warehouse name if ID not found
-      requestBody.pickup_location = warehouse.name;
+    } else {
+      const envPickupName = process.env.SHIPROCKET_PICKUP_LOCATION_NAME?.trim();
+      const locations = await getShiprocketPickupLocations().catch(() => [] as ShiprocketPickupLocation[]);
+      const matchName = (name?: string) => {
+        if (!name?.trim() || locations.length === 0) return null;
+        const n = name.trim().toLowerCase();
+        const hit = locations.find(
+          (l) =>
+            l.pickup_location?.toLowerCase() === n ||
+            l.pickup_location?.toLowerCase().includes(n) ||
+            n.includes(l.pickup_location?.toLowerCase() || '')
+        );
+        return hit?.pickup_location ?? null;
+      };
+      const fromEnv = matchName(envPickupName);
+      const fromWarehouse = matchName(warehouse?.name);
+      const firstActive = locations.find((l) => l.status === 2) || locations[0];
+      const pickupName = fromEnv || fromWarehouse || firstActive?.pickup_location;
+      if (pickupName) {
+        requestBody.pickup_location = pickupName;
+        srLog('pickup_location.used_name', { pickupName, source: fromEnv ? 'env' : fromWarehouse ? 'warehouse' : 'first_active' });
+      } else if (warehouse?.name) {
+        srLog('pickup_location.unverified_name', { warehouseName: warehouse.name }, 'warn');
+        requestBody.pickup_location = warehouse.name;
+      }
     }
 
     // Log the request for debugging (mask sensitive data)

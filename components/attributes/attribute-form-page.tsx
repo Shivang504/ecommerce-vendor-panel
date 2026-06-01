@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft, ImageIcon, Loader2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { isColorAttribute, sanitizeValueImages } from '@/lib/attribute-images';
 
 const ATTRIBUTE_STYLES = [
   { label: 'Rectangle', value: 'rectangle' },
@@ -28,6 +29,8 @@ export function AttributeFormPage({ attributeId }: AttributeFormPageProps) {
   const [name, setName] = useState('');
   const [style, setStyle] = useState(ATTRIBUTE_STYLES[0].value);
   const [values, setValues] = useState<string[]>([]);
+  const [valueImages, setValueImages] = useState<Record<string, string>>({});
+  const [uploadingValue, setUploadingValue] = useState<string | null>(null);
   const [valueInput, setValueInput] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -43,7 +46,9 @@ export function AttributeFormPage({ attributeId }: AttributeFormPageProps) {
           const data = await response.json();
           setName(data.name || '');
           setStyle(data.style || ATTRIBUTE_STYLES[0].value);
-          setValues(Array.isArray(data.values) ? data.values : []);
+          const loadedValues = Array.isArray(data.values) ? data.values : [];
+          setValues(loadedValues);
+          setValueImages(sanitizeValueImages(loadedValues, data.valueImages));
         } else {
           toast({
             title: 'Error',
@@ -82,6 +87,36 @@ export function AttributeFormPage({ attributeId }: AttributeFormPageProps) {
 
   const removeValue = (value: string) => {
     setValues(prev => prev.filter(v => v !== value));
+    setValueImages(prev => {
+      const next = { ...prev };
+      delete next[value];
+      return next;
+    });
+  };
+
+  const showValueImages = isColorAttribute(name, style);
+
+  const uploadValueImage = async (value: string, file: File) => {
+    setUploadingValue(value);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch('/api/upload', { method: 'POST', body: formData });
+      const data = await response.json();
+      if (!response.ok || !data.url) {
+        throw new Error(data.error || 'Upload failed');
+      }
+      setValueImages(prev => ({ ...prev, [value]: data.url }));
+      toast({ title: 'Image uploaded', description: `Image set for "${value}"` });
+    } catch (error) {
+      toast({
+        title: 'Upload failed',
+        description: error instanceof Error ? error.message : 'Could not upload image',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingValue(null);
+    }
   };
 
   const validate = () => {
@@ -105,7 +140,12 @@ export function AttributeFormPage({ attributeId }: AttributeFormPageProps) {
 
     setSaving(true);
     try {
-      const payload = { name: name.trim(), style, values };
+      const payload = {
+        name: name.trim(),
+        style,
+        values,
+        valueImages: sanitizeValueImages(values, valueImages),
+      };
       const url = attributeId ? `/api/admin/attributes/${attributeId}` : '/api/admin/attributes';
       const method = attributeId ? 'PUT' : 'POST';
 
@@ -237,15 +277,65 @@ export function AttributeFormPage({ attributeId }: AttributeFormPageProps) {
                 </Button>
               </div>
               {errors.valueInput && <p className='text-sm text-red-500'>{errors.valueInput}</p>}
+              {showValueImages && values.length > 0 && (
+                <p className='text-xs text-muted-foreground'>
+                  Upload a swatch image for each color (shown on product page next to the color name).
+                </p>
+              )}
               {values.length > 0 && (
-                <div className='flex flex-wrap gap-2 mt-2'>
+                <div className='space-y-3 mt-2'>
                   {values.map(value => (
-                    <Badge key={value} variant='secondary' className='flex items-center gap-2 px-3 py-1'>
-                      {value}
-                      <button type='button' onClick={() => removeValue(value)} className='text-slate-500 hover:text-slate-700'>
-                        <X className='w-3 h-3' />
+                    <div
+                      key={value}
+                      className='flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3'>
+                      {showValueImages && (
+                        <label className='relative flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-slate-200 bg-white'>
+                          {valueImages[value] ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={valueImages[value]} alt={value} className='h-full w-full object-cover' />
+                          ) : (
+                            <ImageIcon className='h-5 w-5 text-slate-400' />
+                          )}
+                          <input
+                            type='file'
+                            accept='image/*'
+                            className='absolute inset-0 cursor-pointer opacity-0'
+                            disabled={saving || uploadingValue === value}
+                            onChange={e => {
+                              const file = e.target.files?.[0];
+                              if (file) void uploadValueImage(value, file);
+                              e.target.value = '';
+                            }}
+                          />
+                          {uploadingValue === value && (
+                            <span className='absolute inset-0 flex items-center justify-center bg-white/80'>
+                              <Loader2 className='h-4 w-4 animate-spin text-primary' />
+                            </span>
+                          )}
+                        </label>
+                      )}
+                      <span className='min-w-[4rem] font-medium text-slate-800'>{value}</span>
+                      {showValueImages && valueImages[value] && (
+                        <button
+                          type='button'
+                          className='text-xs text-red-600 hover:underline'
+                          onClick={() =>
+                            setValueImages(prev => {
+                              const next = { ...prev };
+                              delete next[value];
+                              return next;
+                            })
+                          }>
+                          Remove image
+                        </button>
+                      )}
+                      <button
+                        type='button'
+                        onClick={() => removeValue(value)}
+                        className='ml-auto text-slate-500 hover:text-slate-700'>
+                        <X className='w-4 h-4' />
                       </button>
-                    </Badge>
+                    </div>
                   ))}
                 </div>
               )}
