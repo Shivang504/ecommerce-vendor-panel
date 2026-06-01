@@ -5,7 +5,7 @@ export const metadata = {
   title: 'Orders | Admin',
   description: 'View orders',
 };
-//
+
 export default function OrdersPage() {
   return (
     <AdminLayout>
