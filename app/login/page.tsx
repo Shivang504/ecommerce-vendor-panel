@@ -37,7 +37,6 @@ export default function LoginPage() {
       });
 
       const data = await response.json();
-      console.log('[v0] Login response received:', data);
 
       if (!response.ok) {
         console.log('[v0] Login failed:', data.error);
