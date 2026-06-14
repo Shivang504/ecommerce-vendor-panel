@@ -144,6 +144,7 @@ interface Product {
   sgst?: number; // SGST (auto-calculated)
   igst?: number; // IGST (auto-calculated)
   vendorState?: string; // Vendor state for GST calculation
+  lastSavedTab?: ProductFormTabId;
 }
 const INITIAL_PRODUCT: Product = {
   name: '',
@@ -191,7 +192,7 @@ const INITIAL_PRODUCT: Product = {
   specifications: {},
   variants: [],
   relatedProducts: [],
-  status: 'active',
+  status: 'draft',
   visibility: 'Public',
   featured: false,
   trending: false,
@@ -775,6 +776,12 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
 
         console.log('[v0] Safe product data:', safeData);
         setFormData(safeData);
+        if (
+          safeData.lastSavedTab &&
+          PRODUCT_FORM_TAB_ORDER.includes(safeData.lastSavedTab as ProductFormTabId)
+        ) {
+          setActiveTab(safeData.lastSavedTab as ProductFormTabId);
+        }
         console.log('[v0] Form data set successfully');
       } else {
         const errorData = await response.json();
@@ -953,6 +960,66 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     return Object.keys(tabErrors).length === 0;
   };
 
+  const saveProduct = async ({
+    isFinalSubmit,
+    nextTab,
+  }: {
+    isFinalSubmit: boolean;
+    nextTab?: ProductFormTabId;
+  }): Promise<string | null> => {
+    setLoading(true);
+
+    try {
+      const isDraftFlow = !isFinalSubmit && (!productId || formData.status === 'draft');
+      const method = productId ? 'PUT' : 'POST';
+      const url = productId ? `/api/admin/products/${productId}` : '/api/admin/products';
+
+      const { _id, createdAt, updatedAt, ...cleanData } = formData as Product;
+
+      if (isVendor && currentVendorInfo?.storeName) {
+        cleanData.vendor = currentVendorInfo.storeName;
+      }
+
+      if (isDraftFlow) {
+        cleanData.status = 'draft';
+      } else if (isFinalSubmit && cleanData.status === 'draft') {
+        cleanData.status = 'active';
+      }
+
+      if (nextTab) {
+        cleanData.lastSavedTab = nextTab;
+      }
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanData),
+      });
+
+      const responseData = await response.json();
+
+      if (response.ok) {
+        return responseData._id || productId || null;
+      }
+
+      toast({
+        title: 'Error',
+        description: responseData.error || 'Failed to save product',
+        variant: 'destructive',
+      });
+      return null;
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Network error: ' + (error instanceof Error ? error.message : 'Unknown error'),
+        variant: 'destructive',
+      });
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -967,10 +1034,29 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         });
         return;
       }
+
       const idx = PRODUCT_FORM_TAB_ORDER.indexOf(activeTab);
-      if (idx >= 0 && idx < PRODUCT_FORM_TAB_ORDER.length - 1) {
-        setActiveTab(PRODUCT_FORM_TAB_ORDER[idx + 1]);
+      const nextTab =
+        idx >= 0 && idx < PRODUCT_FORM_TAB_ORDER.length - 1
+          ? PRODUCT_FORM_TAB_ORDER[idx + 1]
+          : activeTab;
+
+      const savedId = await saveProduct({ isFinalSubmit: false, nextTab });
+      if (!savedId) {
+        return;
       }
+
+      if (!productId) {
+        router.replace(`/supplier/products/edit/${savedId}`);
+        return;
+      }
+
+      setActiveTab(nextTab);
+      toast({
+        title: 'Saved',
+        description: 'Your progress has been saved',
+        variant: 'success',
+      });
       return;
     }
 
@@ -983,52 +1069,17 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
       return;
     }
 
-    setLoading(true);
-
-    try {
-      const method = productId ? 'PUT' : 'POST';
-      const url = productId ? `/api/admin/products/${productId}` : '/api/admin/products';
-
-      const { _id, createdAt, updatedAt, ...cleanData } = formData as any;
-
-      // If vendor is logged in, ensure vendor field is set to their store name
-      if (isVendor && currentVendorInfo?.storeName) {
-        cleanData.vendor = currentVendorInfo.storeName;
-      }
-
-      console.log('[v0] Submitting product data:', cleanData);
-
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cleanData),
-      });
-
-      const responseData = await response.json();
-
-      if (response.ok) {
-        toast({
-          title: 'Success',
-          description: productId ? 'Product updated successfully' : 'Product created successfully',
-          variant: 'success',
-        });
-        router.push('/supplier/products');
-      } else {
-        toast({
-          title: 'Error',
-          description: responseData.error || `Failed to save product`,
-          variant: 'destructive',
-        });
-      }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Network error: ' + (error instanceof Error ? error.message : 'Unknown error'),
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
+    const savedId = await saveProduct({ isFinalSubmit: true });
+    if (!savedId) {
+      return;
     }
+
+    toast({
+      title: 'Success',
+      description: productId ? 'Product updated successfully' : 'Product created successfully',
+      variant: 'success',
+    });
+    router.push('/supplier/products');
   };
 
   // Round up to next preferred price (e.g., 699, 749, 799, etc.)
@@ -1620,6 +1671,11 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
             <h1 className='text-2xl md:text-3xl font-bold text-slate-900 dark:text-white'>
               {productId ? 'Edit Product' : 'Add New Product'}
             </h1>
+            {formData.status === 'draft' && (
+              <span className='inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800'>
+                Draft
+              </span>
+            )}
           </div>
         </div>
 
@@ -2859,7 +2915,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                             { label: 'Active', value: 'active' },
                             { label: 'Inactive', value: 'inactive' },
                           ]}
-                          value={formData.status}
+                          value={formData.status === 'draft' ? 'active' : formData.status}
                           onChange={option => handleChange('status', option.value)}
                           placeholder='Select status'
                         />

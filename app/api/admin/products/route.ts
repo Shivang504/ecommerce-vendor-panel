@@ -238,9 +238,12 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.json();
     const body = normalizeProductPayload(rawBody);
 
-    const jewelleryValidationError = validateJewelleryPayload(body);
-    if (jewelleryValidationError) {
-      return NextResponse.json({ error: jewelleryValidationError }, { status: 400 });
+    const isDraftSave = body.status === 'draft';
+    if (!isDraftSave) {
+      const jewelleryValidationError = validateJewelleryPayload(body);
+      if (jewelleryValidationError) {
+        return NextResponse.json({ error: jewelleryValidationError }, { status: 400 });
+      }
     }
     
     // Get current user from token

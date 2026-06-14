@@ -299,6 +299,10 @@ export function ProductList() {
   };
 
   const handleToggleStatus = async (productId: string, currentStatus: string) => {
+    if (currentStatus === 'draft') {
+      return;
+    }
+
     try {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
       const response = await fetch(`/api/admin/products/${productId}`, {
@@ -564,6 +568,7 @@ export function ProductList() {
                   <SelectItem value='all'>All Statuses</SelectItem>
                   <SelectItem value='active'>Active</SelectItem>
                   <SelectItem value='inactive'>Inactive</SelectItem>
+                  <SelectItem value='draft'>Draft</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -645,11 +650,17 @@ export function ProductList() {
                           </span>
                         </TableCell>
                         <TableCell className='py-4 px-4 text-center'>
-                          <Switch
-                            size='md'
-                            checked={product.status === 'active'}
-                            onCheckedChange={() => handleToggleStatus(product._id || product.id || '', product.status)}
-                          />
+                          {product.status === 'draft' ? (
+                            <span className='inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'>
+                              Draft
+                            </span>
+                          ) : (
+                            <Switch
+                              size='md'
+                              checked={product.status === 'active'}
+                              onCheckedChange={() => handleToggleStatus(product._id || product.id || '', product.status)}
+                            />
+                          )}
                         </TableCell>
                         <TableCell className='py-4 px-4 text-center'>
                           <Switch

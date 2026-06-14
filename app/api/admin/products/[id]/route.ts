@@ -110,8 +110,9 @@ export async function PUT(
     // If only status is being updated, skip validation
     const isStatusOnlyUpdate = Object.keys(updateData).length === 1 && 'status' in updateData;
     const normalizedUpdateData = isStatusOnlyUpdate ? updateData : normalizeProductPayload(updateData);
+    const isDraftSave = normalizedUpdateData.status === 'draft';
     
-    if (!isStatusOnlyUpdate) {
+    if (!isStatusOnlyUpdate && !isDraftSave) {
       const requiredFields = ['name', 'sku', 'shortDescription', 'longDescription', 'category'];
       const missingFields = requiredFields.filter(field => !normalizedUpdateData[field]);
       if (missingFields.length > 0) {
