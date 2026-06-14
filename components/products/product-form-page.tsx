@@ -1463,6 +1463,23 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     handleChange('urlSlug', slug);
   };
 
+  const getDefaultVariantPrice = (): number => {
+    return (
+      formData.sellingPrice ||
+      formData.sellingPriceInclGST ||
+      formData.regularPrice ||
+      0
+    );
+  };
+
+  const applyDefaultPriceToVariant = <T extends { price?: number }>(variant: T): T => {
+    const defaultPrice = getDefaultVariantPrice();
+    if (!variant.price) {
+      return { ...variant, price: defaultPrice };
+    }
+    return variant;
+  };
+
   // Generate all combinations from selected attributes
   const generateAttributeCombinations = (): Array<Record<string, string>> => {
     const selectedAttributes = formData.attributes || {};
@@ -1531,7 +1548,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         attributeCombination: combination,
         [field]: value,
         stock: field === 'stock' ? (value as number) : 0,
-        price: field === 'price' ? (value as number) : formData.sellingPrice || 0,
+        price: field === 'price' ? (value as number) : getDefaultVariantPrice(),
       });
     }
 
@@ -1599,6 +1616,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
 
     const combinations = generateAttributeCombinations();
     if (combinations.length > 0) {
+      const defaultPrice = getDefaultVariantPrice();
       const existingVariants = formData.variants || [];
       const existingCombinations = new Set(existingVariants.map(v => JSON.stringify(v.attributeCombination)));
 
@@ -1607,19 +1625,22 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         .filter(comb => !existingCombinations.has(JSON.stringify(comb)))
         .map(comb => ({
           attributeCombination: comb,
-          price: formData.sellingPrice || formData.regularPrice || 0,
+          price: defaultPrice,
           stock: 0,
           sku: '',
         }));
 
-      // Remove variants that no longer have valid combinations
+      // Remove variants that no longer have valid combinations; fill missing prices on kept variants
       const validCombinations = new Set(combinations.map(c => JSON.stringify(c)));
-      const filteredVariants = existingVariants.filter(v => validCombinations.has(JSON.stringify(v.attributeCombination)));
+      const filteredVariants = existingVariants
+        .filter(v => validCombinations.has(JSON.stringify(v.attributeCombination)))
+        .map(v => applyDefaultPriceToVariant(v));
 
-      if (newVariants.length > 0 || filteredVariants.length !== existingVariants.length) {
+      const nextVariants = [...filteredVariants, ...newVariants];
+      if (JSON.stringify(nextVariants) !== JSON.stringify(existingVariants)) {
         setFormData(prev => ({
           ...prev,
-          variants: [...filteredVariants, ...newVariants],
+          variants: nextVariants,
         }));
       }
     } else if (formData.variants && formData.variants.length > 0) {
@@ -1631,6 +1652,21 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(formData.attributes), attributeOptions.length]);
+
+  // Fill variant prices when product default price is set or updated (only variants without a price)
+  useEffect(() => {
+    const defaultPrice = getDefaultVariantPrice();
+    if (!defaultPrice || !formData.variants?.length) return;
+
+    const needsUpdate = formData.variants.some(v => !v.price);
+    if (!needsUpdate) return;
+
+    setFormData(prev => ({
+      ...prev,
+      variants: (prev.variants || []).map(v => applyDefaultPriceToVariant(v)),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.sellingPrice, formData.regularPrice, formData.sellingPriceInclGST]);
 
   const trimmedTagInput = tagSearchTerm.trim();
   const normalizedTagQuery = trimmedTagInput.toLowerCase();
@@ -2597,19 +2633,18 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                                         </label>
                                         <Input
                                           type='number'
-                                          placeholder={`${formData.sellingPrice || formData.regularPrice || 0}`}
-                                          value={variant?.price || ''}
+                                          placeholder={`${getDefaultVariantPrice()}`}
+                                          value={
+                                            variant?.price && variant.price > 0
+                                              ? variant.price
+                                              : getDefaultVariantPrice() || ''
+                                          }
                                           onChange={e => {
-                                            const val = parseFloat(e.target.value) || 0;
+                                            const val = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0;
                                             updateVariant(combination, 'price', val);
                                           }}
                                           className='bg-white dark:bg-slate-800'
                                         />
-                                        {!variant?.price && (
-                                          <p className='text-xs text-slate-500 mt-1'>
-                                            Default: ₹{formData.sellingPrice || formData.regularPrice || 0}
-                                          </p>
-                                        )}
                                       </div>
                                       <div>
                                         <label className='block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1'>Stock *</label>
