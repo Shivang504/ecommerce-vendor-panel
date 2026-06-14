@@ -19,10 +19,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Search, Filter, Plus, Trash2, Pencil, Eye } from 'lucide-react';
+import { Download, Search, Filter, Plus, Trash2, Pencil, Eye, Upload } from 'lucide-react';
 import { CommonDialog } from '../dialog/dialog';
 import { Switch } from '@/components/ui/switch';
 import { formatIndianDate } from '@/app/utils/helper';
+import { ProductBulkImportDialog } from './product-bulk-import-dialog';
 
 interface Product {
   _id?: string;
@@ -99,6 +100,20 @@ export function ProductList() {
   const [limit, setLimit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const [isVendor, setIsVendor] = useState(false);
+
+  useEffect(() => {
+    try {
+      const adminUserStr = localStorage.getItem('adminUser');
+      if (adminUserStr) {
+        const adminUser = JSON.parse(adminUserStr);
+        setIsVendor(adminUser?.role === 'vendor');
+      }
+    } catch {
+      setIsVendor(false);
+    }
+  }, []);
 
   // useEffect(() => {
   //   toast({
@@ -497,6 +512,13 @@ export function ProductList() {
             </p>
           </div>
           <div className='flex gap-3'>
+            <Button
+              variant='outline'
+              className='gap-2 border-slate-300 dark:border-slate-600'
+              onClick={() => setBulkImportOpen(true)}>
+              <Upload className='w-4 h-4' />
+              Bulk Import
+            </Button>
             <Button
               variant='outline'
               className='gap-2 border-slate-300 dark:border-slate-600'
@@ -930,6 +952,13 @@ export function ProductList() {
           </div>
         )}
       </CommonDialog>
+
+      <ProductBulkImportDialog
+        open={bulkImportOpen}
+        onOpenChange={setBulkImportOpen}
+        onImportComplete={fetchProducts}
+        isVendor={isVendor}
+      />
     </>
   );
 }
