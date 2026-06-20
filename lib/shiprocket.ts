@@ -330,6 +330,44 @@ async function getShiprocketTokenWithCredentials(
   }
 }
 
+/** Pick cheapest courier by rate; equal price keeps the first in Shiprocket's list. */
+export function selectCheapestCourier<T extends { rate: number }>(couriers: T[]): T | undefined {
+  if (couriers.length === 0) return undefined;
+  return couriers.reduce((cheapest, current) =>
+    current.rate < cheapest.rate ? current : cheapest
+  );
+}
+
+export type ShiprocketCourierOption = {
+  courierId: number;
+  courierName: string;
+  estimatedDays: number;
+  rate: number;
+};
+
+/** Prefer checkout-selected courier when still serviceable; otherwise cheapest. */
+export function resolveCourierForShipment(
+  couriers: ShiprocketCourierOption[],
+  preferredCourierId?: number
+): ShiprocketCourierOption | undefined {
+  if (couriers.length === 0) return undefined;
+
+  if (preferredCourierId) {
+    const preferred = couriers.find(c => c.courierId === preferredCourierId);
+    if (preferred) {
+      console.log('[Shiprocket] Using order checkout courier:', {
+        courierId: preferred.courierId,
+        courierName: preferred.courierName,
+        rate: preferred.rate,
+      });
+      return preferred;
+    }
+    console.warn('[Shiprocket] Checkout courier unavailable at pickup, using cheapest fallback:', preferredCourierId);
+  }
+
+  return selectCheapestCourier(couriers);
+}
+
 /**
  * Check pincode serviceability using Shiprocket API
  * @param deliveryPincode - Delivery pincode (6 digits)

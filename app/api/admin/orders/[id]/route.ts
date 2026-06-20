@@ -506,22 +506,25 @@ export async function PUT(
               ...(serviceabilityResult.couriers.length > 5 && { moreAvailable: serviceabilityResult.couriers.length - 5 }),
             });
             
-            // Get fastest courier (lowest estimatedDays, then lowest rate)
+            // Use checkout-selected courier when still serviceable
             let fastestCourierId: number | undefined = undefined;
             let fastestCourierName: string | undefined = undefined;
             if (serviceabilityResult.isServiceable && serviceabilityResult.couriers.length > 0) {
-              const fastestCourier = serviceabilityResult.couriers.reduce((best, current) => {
-                if (current.estimatedDays < best.estimatedDays) return current;
-                if (current.estimatedDays === best.estimatedDays && current.rate < best.rate) return current;
-                return best;
-              });
-              fastestCourierId = fastestCourier.courierId;
-              fastestCourierName = fastestCourier.courierName;
-              console.log('[Ready for Pickup] 🚚 Fastest Courier Selected:', {
+              const { resolveCourierForShipment } = await import('@/lib/shiprocket');
+              const preferredCourierId = (currentOrder as any).selectedCourier?.courierId;
+              const selectedCourier = resolveCourierForShipment(
+                serviceabilityResult.couriers,
+                preferredCourierId
+              );
+              if (selectedCourier) {
+                fastestCourierId = selectedCourier.courierId;
+                fastestCourierName = selectedCourier.courierName;
+              }
+              console.log('[Ready for Pickup] 🚚 Courier Selected:', {
                 courierId: fastestCourierId,
                 courierName: fastestCourierName,
-                estimatedDays: fastestCourier.estimatedDays,
-                rate: `₹${fastestCourier.rate}`,
+                source: preferredCourierId && fastestCourierId === preferredCourierId ? 'checkout' : 'pickup-fallback',
+                checkoutCourierId: preferredCourierId || 'none',
               });
             } else {
               console.warn('[Ready for Pickup] ⚠️ No serviceable couriers found!');

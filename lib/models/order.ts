@@ -194,6 +194,14 @@ export interface Order {
   
   // Estimated delivery information
   estimatedDeliveryDays?: number; // Estimated delivery days from pincode serviceability check
+
+  /** Courier selected at checkout (used again at Ready for Pickup AWB) */
+  selectedCourier?: {
+    courierId: number;
+    courierName: string;
+    rate?: number;
+    estimatedDays?: number;
+  };
   
   createdAt: Date;
   updatedAt: Date;
