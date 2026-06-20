@@ -24,6 +24,20 @@ export interface Vendor {
   pinCode: string;
   country: string;
   pickupLocation?: string;
+  pickupAddresses?: Array<{
+    id: string;
+    label: string;
+    address1: string;
+    address2?: string;
+    city: string;
+    state: string;
+    pinCode: string;
+    country: string;
+    phone?: string;
+    email?: string;
+    contactPerson?: string;
+    isDefault: boolean;
+  }>;
   bankName?: string;
   accountHolderName?: string;
   accountNumber?: string;

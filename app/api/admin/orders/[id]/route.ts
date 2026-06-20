@@ -7,94 +7,13 @@ import { generateOrderStatusUpdateEmailHTML, generatePaymentStatusUpdateEmailHTM
 import { ObjectId } from 'mongodb';
 import { getUserFromRequest, isVendor, isAdmin } from '@/lib/auth';
 import { isShiprocketEnabled } from '@/lib/shiprocket-env';
+import { resolveVendorPickupAddress } from '@/lib/vendor-pickup';
 
 function normalizeId(value: any): string | undefined {
   if (!value) return undefined;
   if (typeof value === 'string') return value;
   if (typeof value === 'object' && typeof value.toString === 'function') return value.toString();
   return undefined;
-}
-
-function buildVendorPickupAddress(vendor: any) {
-  if (!vendor) return null;
-
-  const pickupAddress = vendor.pickupAddress || {};
-  const pickupLocation =
-    pickupAddress.pickupLocation ||
-    pickupAddress.location ||
-    vendor.pickupLocation ||
-    vendor.warehouseLocation ||
-    vendor.storeName;
-  const address =
-    pickupAddress.address ||
-    pickupAddress.address1 ||
-    pickupAddress.street ||
-    vendor.pickupAddress1 ||
-    vendor.address1;
-  const address2 =
-    pickupAddress.address2 ||
-    pickupAddress.landmark ||
-    vendor.pickupAddress2 ||
-    vendor.address2 ||
-    '';
-  const city = pickupAddress.city || vendor.pickupCity || vendor.city;
-  const state = pickupAddress.state || vendor.pickupState || vendor.state;
-  const pincode =
-    pickupAddress.pincode ||
-    pickupAddress.pinCode ||
-    pickupAddress.postalCode ||
-    vendor.pickupPincode ||
-    vendor.pinCode;
-  const phone = pickupAddress.phone || vendor.pickupPhone || vendor.phone || vendor.whatsappNumber;
-  const email = pickupAddress.email || vendor.pickupEmail || vendor.email;
-
-  if (!pickupLocation || !address || !city || !state || !pincode || !phone || !email) {
-    return null;
-  }
-
-  return {
-    pickupLocation: String(pickupLocation),
-    address: String(address),
-    address2: address2 ? String(address2) : undefined,
-    city: String(city),
-    state: String(state),
-    country: String(pickupAddress.country || vendor.pickupCountry || vendor.country || 'India'),
-    pincode: String(pincode),
-    contactPerson: String(pickupAddress.contactPerson || vendor.ownerName || vendor.storeName || pickupLocation),
-    phone: String(phone),
-    email: String(email),
-    sellerName: String(vendor.storeName || vendor.ownerName || pickupLocation),
-  };
-}
-
-async function resolveVendorPickupAddress(db: any, items: any[]) {
-  const vendorIds = Array.from(
-    new Set(
-      items
-        .map((item) => normalizeId(item.vendorId))
-        .filter((vendorId): vendorId is string => !!vendorId)
-    )
-  );
-
-  for (const vendorId of vendorIds) {
-    try {
-      const vendorQuery = ObjectId.isValid(vendorId)
-        ? { _id: new ObjectId(vendorId) }
-        : { _id: vendorId };
-      const vendor = await db.collection('vendors').findOne(vendorQuery);
-      const pickupAddress = buildVendorPickupAddress(vendor);
-      if (pickupAddress) {
-        return { vendorId, pickupAddress };
-      }
-    } catch (error) {
-      console.warn('[Ready for Pickup] Could not resolve vendor pickup address:', {
-        vendorId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  return { vendorId: undefined, pickupAddress: null };
 }
 
 // GET - Get order details
@@ -363,14 +282,36 @@ export async function PUT(
         });
       }
       
-      await updateOrderStatus(id, orderStatus, adminNotes);
-
       const statusNormalized = String(orderStatus || '')
         .trim()
         .toLowerCase()
         .replace(/\s+/g, '_');
       const isReadyForPickup = statusNormalized === 'ready_for_pickup';
       const shiprocketOn = isShiprocketEnabled();
+
+      if (isReadyForPickup && shiprocketOn) {
+        const { db } = await connectToDatabase();
+        const preferredVendorId = isVendor(currentUser) ? currentUser.id : undefined;
+        const previewItems = currentOrder.items.map((item: any) => ({
+          vendorId: normalizeId(item.vendorId),
+        }));
+        const { pickupAddress: previewPickupAddress } = await resolveVendorPickupAddress(
+          db,
+          previewItems,
+          preferredVendorId
+        );
+        if (!previewPickupAddress) {
+          return NextResponse.json(
+            {
+              error:
+                'Vendor pickup address is missing. Add a default pickup address in Profile before Ready for Pickup.',
+            },
+            { status: 400 }
+          );
+        }
+      }
+
+      await updateOrderStatus(id, orderStatus, adminNotes);
 
       if (isReadyForPickup && !shiprocketOn) {
         console.warn(
@@ -466,15 +407,18 @@ export async function PUT(
             
             console.log('[Ready for Pickup] ⚖️ Total Package Weight:', `${totalWeight.toFixed(2)} kg`);
             
+            const preferredVendorId = isVendor(currentUser) ? currentUser.id : undefined;
             const { vendorId: pickupVendorId, pickupAddress: vendorPickupAddress } =
-              await resolveVendorPickupAddress(db, itemsWithProducts);
-            const warehouseId = itemsWithProducts.find((item) => item.warehouseId)?.warehouseId;
+              await resolveVendorPickupAddress(db, itemsWithProducts, preferredVendorId);
+            const warehouseId = vendorPickupAddress
+              ? undefined
+              : itemsWithProducts.find((item) => item.warehouseId)?.warehouseId;
             
             console.log('[Ready for Pickup] 🏭 Pickup Source:', {
-              vendorId: pickupVendorId || 'None',
-              vendorPickupLocation: vendorPickupAddress?.pickupLocation || 'Unavailable',
-              vendorPickupPincode: vendorPickupAddress?.pincode || 'Unavailable',
-              warehouseId: warehouseId || 'Default',
+              vendorId: pickupVendorId || preferredVendorId || 'None',
+              vendorPickupLocation: vendorPickupAddress.pickupLocation,
+              vendorPickupPincode: vendorPickupAddress.pincode,
+              warehouseId: warehouseId || 'Not used (vendor pickup)',
             });
             
             // Check serviceability to get fastest courier
@@ -488,7 +432,7 @@ export async function PUT(
             
             const serviceabilityResult = await checkShiprocketServiceability(
               currentOrder.shippingAddress.postalCode,
-              vendorPickupAddress?.pincode,
+              vendorPickupAddress.pincode,
               totalWeight,
               currentOrder.payment.paymentMethod === 'cod' ? currentOrder.pricing.total : 0,
               warehouseId
@@ -542,7 +486,7 @@ export async function PUT(
               pricing: currentOrder.pricing,
               paymentMethod: currentOrder.payment.paymentMethod,
               warehouseId,
-              pickupAddress: vendorPickupAddress || undefined,
+              pickupAddress: vendorPickupAddress,
             });
             
             if (shiprocketResult.success) {

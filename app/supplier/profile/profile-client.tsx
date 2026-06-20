@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { isValidIndianGstin, isValidIndianPan } from '@/lib/india-tax-ids';
+import { PickupAddressesCard } from '@/components/vendor/pickup-addresses-card';
 
 type FieldErrors = Record<string, string>;
 
@@ -36,9 +37,6 @@ export function ProfileClient() {
     accountNumber: '',
     ifscCode: '',
   });
-  const [pickupForm, setPickupForm] = useState({
-    pickupLocation: '',
-  });
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -48,13 +46,11 @@ export function ProfileClient() {
   const [personalErrors, setPersonalErrors] = useState<FieldErrors>({});
   const [businessErrors, setBusinessErrors] = useState<FieldErrors>({});
   const [bankErrors, setBankErrors] = useState<FieldErrors>({});
-  const [pickupErrors, setPickupErrors] = useState<FieldErrors>({});
   const [passwordErrors, setPasswordErrors] = useState<FieldErrors>({});
 
   const [savingPersonal, setSavingPersonal] = useState(false);
   const [savingBusiness, setSavingBusiness] = useState(false);
   const [savingBank, setSavingBank] = useState(false);
-  const [savingPickup, setSavingPickup] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
 
   const [showPassword, setShowPassword] = useState({
@@ -114,9 +110,6 @@ export function ProfileClient() {
           accountHolderName: data.accountHolderName || '',
           accountNumber: data.accountNumber || '',
           ifscCode: data.ifscCode || '',
-        });
-        setPickupForm({
-          pickupLocation: data.pickupLocation || '',
         });
         setProfileLoaded(true);
       } catch (error) {
@@ -181,15 +174,6 @@ export function ProfileClient() {
     return Object.keys(errors).length === 0;
   };
 
-  const validatePickup = () => {
-    const errors: FieldErrors = {};
-    if (!pickupForm.pickupLocation.trim() || pickupForm.pickupLocation.trim().length < 3) {
-      errors.pickupLocation = 'Pickup location is required';
-    }
-    setPickupErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
   const validatePassword = () => {
     const errors: FieldErrors = {};
     if (!passwordForm.currentPassword) {
@@ -209,7 +193,7 @@ export function ProfileClient() {
   };
 
   const handleSave = async (
-    section: 'personal' | 'business' | 'bank' | 'pickup',
+    section: 'personal' | 'business' | 'bank',
     payload: Record<string, string>,
     setSaving: (value: boolean) => void,
     onValidate: () => boolean
@@ -236,7 +220,6 @@ export function ProfileClient() {
           if (section === 'personal') setPersonalErrors(data.fieldErrors);
           if (section === 'business') setBusinessErrors(data.fieldErrors);
           if (section === 'bank') setBankErrors(data.fieldErrors);
-          if (section === 'pickup') setPickupErrors(data.fieldErrors);
         }
         throw new Error(data?.error || 'Failed to update profile');
       }
@@ -563,50 +546,7 @@ export function ProfileClient() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Pickup / Warehouse Location</CardTitle>
-                  <CardDescription>Set the pickup or warehouse location for dispatch</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium">Pickup Location / Warehouse Location</label>
-                    <Input
-                      type="text"
-                      placeholder="Enter pickup/warehouse location"
-                      className="mt-1"
-                      value={pickupForm.pickupLocation}
-                      onChange={event =>
-                        setPickupForm(prev => ({ ...prev, pickupLocation: event.target.value }))
-                      }
-                    />
-                    {pickupErrors.pickupLocation && (
-                      <p className="text-xs text-red-600 mt-1">{pickupErrors.pickupLocation}</p>
-                    )}
-                  </div>
-                  <Button
-                    className="bg-green-600 hover:bg-green-700"
-                    disabled={savingPickup}
-                    onClick={() =>
-                      handleSave(
-                        'pickup',
-                        { pickupLocation: pickupForm.pickupLocation },
-                        setSavingPickup,
-                        validatePickup
-                      )
-                    }
-                  >
-                    {savingPickup ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Location'
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
+              <PickupAddressesCard enabled={isVendorUser} />
             </>
           )}
 
