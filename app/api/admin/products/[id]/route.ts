@@ -3,6 +3,39 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { getUserFromRequest, isVendor } from '@/lib/auth';
 import { mongoWriteErrorMessage, normalizeProductPayload } from '@/lib/product-payload';
+import { sanitizeAttributeSelections } from '@/lib/product-attributes';
+
+const normalizeId = (value: unknown): string => {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (value instanceof ObjectId) return value.toString();
+  return String(value);
+};
+
+const vendorOwnsProduct = (productVendorId: unknown, userId: string): boolean => {
+  const normalizedProductVendorId = normalizeId(productVendorId);
+  const normalizedUserId = normalizeId(userId);
+  if (!normalizedProductVendorId || !normalizedUserId) return true;
+  return normalizedProductVendorId === normalizedUserId;
+};
+
+const serializeProductForResponse = (product: Record<string, unknown>) => ({
+  ...JSON.parse(
+    JSON.stringify(product, (_key, value) => {
+      if (value instanceof ObjectId) return value.toString();
+      if (value instanceof Date) return value.toISOString();
+      return value;
+    })
+  ),
+  _id: normalizeId(product._id),
+  vendorId: product.vendorId != null ? normalizeId(product.vendorId) : undefined,
+  tags: Array.isArray(product.tags) ? product.tags : [],
+  galleryImages: Array.isArray(product.galleryImages) ? product.galleryImages : [],
+  relatedProducts: Array.isArray(product.relatedProducts)
+    ? product.relatedProducts.map(item => normalizeId(item))
+    : [],
+  attributes: sanitizeAttributeSelections(product.attributes),
+});
 
 const validateJewelleryPayload = (payload: any) => {
   if (!payload || payload.product_type !== 'Jewellery') {
@@ -33,6 +66,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+
+    if (!ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid product ID' }, { status: 400 });
+    }
+
     const { db } = await connectToDatabase();
     
     // Get current user from token
@@ -45,25 +83,25 @@ export async function GET(
     }
     
     // Check if vendor is trying to access another vendor's product
-    if (currentUser && isVendor(currentUser) && product.vendorId !== currentUser.id) {
+    if (currentUser && isVendor(currentUser) && !vendorOwnsProduct(product.vendorId, currentUser.id)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const productData = {
-      ...product,
-      _id: product._id.toString(),
-      tags: Array.isArray(product.tags) ? product.tags : [],
-      galleryImages: Array.isArray(product.galleryImages) ? product.galleryImages : [],
-      relatedProducts: Array.isArray(product.relatedProducts) ? product.relatedProducts : [],
-      attributes: sanitizeAttributeSelections(product.attributes),
-    };
+    const productData = serializeProductForResponse(product as Record<string, unknown>);
     
-    console.log('[v0] Returning product data:', productData);
+    console.log('[v0] Returning product data for id:', id);
 
     return NextResponse.json(productData);
   } catch (error) {
     console.error('[v0] Error fetching product:', error);
-    return NextResponse.json({ error: 'Failed to fetch product' }, { status: 500 });
+    const details = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json(
+      {
+        error: 'Failed to fetch product',
+        ...(process.env.NODE_ENV === 'development' ? { details } : {}),
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -119,7 +157,7 @@ export async function PUT(
     
     // Get current user and check vendor access
     const currentUser = getUserFromRequest(request);
-    if (currentUser && isVendor(currentUser) && existingProduct.vendorId !== currentUser.id) {
+    if (currentUser && isVendor(currentUser) && !vendorOwnsProduct(existingProduct.vendorId, currentUser.id)) {
       console.log('[v0] Vendor trying to update another vendor\'s product');
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
@@ -173,7 +211,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
     
-    if (currentUser && isVendor(currentUser) && existingProduct.vendorId !== currentUser.id) {
+    if (currentUser && isVendor(currentUser) && !vendorOwnsProduct(existingProduct.vendorId, currentUser.id)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

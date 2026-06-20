@@ -762,7 +762,14 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   const fetchProduct = async () => {
     try {
       console.log('[v0] Fetching product with ID:', productId);
-      const response = await fetch(`/api/admin/products/${productId}`);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
+      const response = await fetch(`/api/admin/products/${productId}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+      });
 
       if (response.ok) {
         const data = await response.json();

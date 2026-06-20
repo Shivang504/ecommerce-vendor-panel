@@ -95,6 +95,7 @@ export function ProductList() {
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [viewProductId, setViewProductId] = useState<string | null>(null);
   const [viewProductData, setViewProductData] = useState<ProductDetails | null>(null);
+  const [viewProductError, setViewProductError] = useState<string | null>(null);
   const [loadingProductDetails, setLoadingProductDetails] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -274,7 +275,9 @@ export function ProductList() {
   };
 
   const handleEditProduct = (product: Product) => {
-    router.push(`/supplier/products/edit/${product._id || product.id}`);
+    const id = resolveProductId(product);
+    if (!id) return;
+    router.push(`/supplier/products/edit/${id}`);
   };
 
   const handleDeleteClick = (productId: string) => {
@@ -465,10 +468,32 @@ export function ProductList() {
   };
   const isJewelleryDialogProduct = viewProductData?.product_type === 'Jewellery';
 
+  const resolveProductId = (product: Pick<Product, '_id' | 'id'> | string | undefined): string => {
+    if (!product) return '';
+    if (typeof product === 'string') return product;
+    const raw = product._id ?? product.id;
+    if (typeof raw === 'string') return raw;
+    if (raw != null && typeof raw === 'object' && 'toString' in raw) return String(raw);
+    return '';
+  };
+
   const fetchProductDetails = async (id: string) => {
+    if (!id) {
+      setViewProductError('Invalid product ID');
+      return;
+    }
+
     try {
       setLoadingProductDetails(true);
-      const response = await fetch(`/api/admin/products/${id}`);
+      setViewProductError(null);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
+      const response = await fetch(`/api/admin/products/${id}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+      });
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error?.error || 'Failed to fetch product details');
@@ -477,9 +502,12 @@ export function ProductList() {
       setViewProductData(data);
     } catch (error) {
       console.error('[v0] Failed to fetch product details:', error);
+      const message = error instanceof Error ? error.message : 'Failed to fetch product details';
+      setViewProductError(message);
+      setViewProductData(null);
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to fetch product details',
+        description: message,
         variant: 'destructive',
       });
     } finally {
@@ -488,10 +516,12 @@ export function ProductList() {
   };
 
   const handleViewProduct = (productId?: string) => {
-    if (!productId) return;
-    setViewProductId(productId);
+    const id = resolveProductId(productId);
+    if (!id) return;
+    setViewProductId(id);
     setViewProductData(null);
-    fetchProductDetails(productId);
+    setViewProductError(null);
+    fetchProductDetails(id);
   };
 
   const DetailItem = ({ label, value }: { label: string; value?: ReactNode }) => (
@@ -824,12 +854,16 @@ export function ProductList() {
           if (!open) {
             setViewProductId(null);
             setViewProductData(null);
+            setViewProductError(null);
           }
         }}
         title='Product Details'
-        description={viewProductData?.sku || viewProductData?._id}
+        description={viewProductData?.sku || viewProductData?._id || viewProductId || undefined}
         cancelText='Close'
         loading={loadingProductDetails}>
+        {viewProductError && !loadingProductDetails && (
+          <p className='mt-2 text-sm text-red-600'>{viewProductError}</p>
+        )}
         {viewProductData && (
           <div className='mt-1 space-y-6 text-sm text-gray-700'>
             {viewProductData.mainImage && (
