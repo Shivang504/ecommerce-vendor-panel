@@ -645,6 +645,20 @@ interface ShiprocketOrderItem {
   hsn?: string;
 }
 
+export interface ShiprocketPickupAddressInput {
+  pickupLocation: string;
+  address: string;
+  address2?: string;
+  city: string;
+  state: string;
+  country?: string;
+  pincode: string;
+  contactPerson?: string;
+  phone: string;
+  email: string;
+  sellerName?: string;
+}
+
 /**
  * Get pickup locations from Shiprocket
  */
@@ -704,6 +718,155 @@ async function getShiprocketPickupLocations(): Promise<ShiprocketPickupLocation[
   } catch (error: any) {
     srLog('pickup_locations.exception', { message: error.message }, 'error');
     throw new Error(`Failed to get pickup locations: ${error.message}`);
+  }
+}
+
+function cleanPincode(pincode?: string): string {
+  return pincode?.replace(/\D/g, '').trim() || '';
+}
+
+function normalizePickupName(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').slice(0, 50);
+}
+
+function findMatchingPickupLocation(
+  locations: ShiprocketPickupLocation[],
+  pickupAddress: ShiprocketPickupAddressInput
+): ShiprocketPickupLocation | null {
+  const pickupName = normalizePickupName(pickupAddress.pickupLocation).toLowerCase();
+  const pincode = cleanPincode(pickupAddress.pincode);
+  const address = pickupAddress.address.trim().toLowerCase();
+
+  return locations.find((loc) => {
+    const locName = loc.pickup_location?.trim().toLowerCase() || '';
+    const locAddress = loc.address?.trim().toLowerCase() || '';
+    const locPincode = cleanPincode(loc.pin_code);
+
+    if (locName && locName === pickupName) return true;
+    if (locPincode && locPincode === pincode && locAddress && address && locAddress === address) return true;
+    return false;
+  }) || null;
+}
+
+async function ensureShiprocketPickupLocation(
+  pickupAddress: ShiprocketPickupAddressInput
+): Promise<ShiprocketPickupLocation | null> {
+  const pickupLocation = normalizePickupName(pickupAddress.pickupLocation);
+  const pincode = cleanPincode(pickupAddress.pincode);
+  const country = pickupAddress.country?.trim() || 'India';
+
+  if (
+    !pickupLocation ||
+    !pickupAddress.address?.trim() ||
+    !pickupAddress.city?.trim() ||
+    !pickupAddress.state?.trim() ||
+    !/^\d{6}$/.test(pincode) ||
+    !pickupAddress.phone?.trim() ||
+    !pickupAddress.email?.trim()
+  ) {
+    srLog('pickup_location.vendor_incomplete', {
+      pickupLocation,
+      hasAddress: !!pickupAddress.address?.trim(),
+      hasCity: !!pickupAddress.city?.trim(),
+      hasState: !!pickupAddress.state?.trim(),
+      pincode,
+      hasPhone: !!pickupAddress.phone?.trim(),
+      hasEmail: !!pickupAddress.email?.trim(),
+    }, 'warn');
+    return null;
+  }
+
+  const existingLocations = await getShiprocketPickupLocations().catch(() => [] as ShiprocketPickupLocation[]);
+  const existing = findMatchingPickupLocation(existingLocations, pickupAddress);
+  if (existing) {
+    srLog('pickup_location.vendor_existing', {
+      id: existing.id,
+      pickupLocation: existing.pickup_location,
+      pincode: existing.pin_code,
+    });
+    return existing;
+  }
+
+  try {
+    const token = await getShiprocketToken();
+    const baseUrl = process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external';
+    const requestUrl = `${baseUrl}/settings/company/addpickup`;
+    const requestBody = {
+      pickup_location: pickupLocation,
+      name: pickupAddress.contactPerson?.trim() || pickupAddress.sellerName?.trim() || pickupLocation,
+      email: pickupAddress.email.trim(),
+      phone: formatPhoneForShiprocket(pickupAddress.phone),
+      address: pickupAddress.address.trim(),
+      address_2: pickupAddress.address2?.trim() || '',
+      city: pickupAddress.city.trim(),
+      state: pickupAddress.state.trim(),
+      country,
+      pin_code: pincode,
+    };
+
+    srLog('pickup_location.vendor_sync_request', {
+      url: requestUrl,
+      pickupLocation,
+      pincode,
+      city: requestBody.city,
+      state: requestBody.state,
+    });
+
+    const response = await fetch(requestUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseText = await response.text();
+    let responseData: any = {};
+    try {
+      responseData = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      responseData = { message: responseText };
+    }
+
+    if (!response.ok) {
+      srLog('pickup_location.vendor_sync_failed', {
+        httpStatus: response.status,
+        message: responseData.message,
+        errors: responseData.errors,
+        bodyPreview: previewBody(responseText),
+      }, 'error');
+      return null;
+    }
+
+    srLog('pickup_location.vendor_sync_success', {
+      pickupLocation,
+      response: responseData,
+    });
+
+    const refreshedLocations = await getShiprocketPickupLocations().catch(() => [] as ShiprocketPickupLocation[]);
+    return findMatchingPickupLocation(refreshedLocations, pickupAddress) || {
+      id: 0,
+      pickup_location: pickupLocation,
+      address: requestBody.address,
+      address_2: requestBody.address_2,
+      city: requestBody.city,
+      state: requestBody.state,
+      country,
+      pin_code: pincode,
+      phone: requestBody.phone,
+      email: requestBody.email,
+      seller_name: requestBody.name,
+      phone_verified: 0,
+      status: 2,
+    };
+  } catch (error: any) {
+    srLog('pickup_location.vendor_sync_exception', {
+      pickupLocation,
+      pincode,
+      message: error.message,
+    }, 'error');
+    return null;
   }
 }
 
@@ -810,6 +973,7 @@ export async function createShiprocketOrder(
     };
     paymentMethod: string;
     warehouseId?: string;
+    pickupAddress?: ShiprocketPickupAddressInput;
   }
 ): Promise<{
   success: boolean;
@@ -832,9 +996,13 @@ export async function createShiprocketOrder(
     const token = await getShiprocketToken();
     const baseUrl = process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external';
 
-    // Get warehouse details if warehouseId provided
+    const vendorPickupLocation = orderData.pickupAddress
+      ? await ensureShiprocketPickupLocation(orderData.pickupAddress)
+      : null;
+
+    // Get warehouse details if warehouseId provided. Vendor pickup takes priority over warehouse/default.
     let warehouse = null;
-    if (orderData.warehouseId) {
+    if (!vendorPickupLocation && orderData.warehouseId) {
       try {
         const { getWarehouseById } = await import('@/lib/models/warehouse');
         warehouse = await getWarehouseById(orderData.warehouseId);
@@ -844,7 +1012,7 @@ export async function createShiprocketOrder(
     }
 
     // If no warehouse, get default warehouse
-    if (!warehouse) {
+    if (!vendorPickupLocation && !warehouse) {
       try {
         const { getDefaultWarehouse } = await import('@/lib/models/warehouse');
         warehouse = await getDefaultWarehouse();
@@ -854,10 +1022,12 @@ export async function createShiprocketOrder(
     }
 
     // Find pickup location ID from Shiprocket
-    const pickupLocationId = await findPickupLocationId(
-      warehouse?.name,
-      warehouse?.pincode
-    );
+    const pickupLocationId = vendorPickupLocation
+      ? null
+      : await findPickupLocationId(
+          warehouse?.name,
+          warehouse?.pincode
+        );
 
     // Calculate total weight (default 0.5kg per item if not specified)
     // Ensure weight is in kg (convert from grams if needed)
@@ -993,8 +1163,14 @@ export async function createShiprocketOrder(
       requestBody.cod_amount = orderData.pricing.total;
     }
 
-    // Pickup location: prefer Shiprocket ID; name string only if it matches a registered pickup
-    if (pickupLocationId) {
+    // Pickup location: vendor pickup is synced first and takes priority. Use default warehouse only when vendor pickup is unavailable.
+    if (vendorPickupLocation) {
+      requestBody.pickup_location = vendorPickupLocation.pickup_location;
+      srLog('pickup_location.vendor_used', {
+        pickupLocation: vendorPickupLocation.pickup_location,
+        pincode: vendorPickupLocation.pin_code,
+      });
+    } else if (pickupLocationId) {
       requestBody.pickup_location = pickupLocationId;
     } else {
       const envPickupName = process.env.SHIPROCKET_PICKUP_LOCATION_NAME?.trim();
