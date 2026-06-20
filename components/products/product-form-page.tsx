@@ -267,6 +267,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [savedProductId, setSavedProductId] = useState<string | undefined>(productId);
   const [fetchingProduct, setFetchingProduct] = useState(!!productId);
   const [vendors, setVendors] = useState<Array<{ _id: string; storeName: string }>>([]);
   const [warehouses, setWarehouses] = useState<Array<{ _id: string; name: string; pincode: string }>>([]);
@@ -297,6 +298,10 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   const [relatedProductsSearch, setRelatedProductsSearch] = useState('');
   const [isVendor, setIsVendor] = useState(false);
   const [currentVendorInfo, setCurrentVendorInfo] = useState<{ storeName: string; _id: string } | null>(null);
+
+  useEffect(() => {
+    setSavedProductId(productId);
+  }, [productId]);
 
   useEffect(() => {
     // Check if current user is a vendor and fetch vendor ID
@@ -970,9 +975,9 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     setLoading(true);
 
     try {
-      const isDraftFlow = !isFinalSubmit && (!productId || formData.status === 'draft');
-      const method = productId ? 'PUT' : 'POST';
-      const url = productId ? `/api/admin/products/${productId}` : '/api/admin/products';
+      const isDraftFlow = !isFinalSubmit && (!savedProductId || formData.status === 'draft');
+      const method = savedProductId ? 'PUT' : 'POST';
+      const url = savedProductId ? `/api/admin/products/${savedProductId}` : '/api/admin/products';
 
       const { _id, createdAt, updatedAt, ...cleanData } = formData as Product;
 
@@ -1010,7 +1015,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
       const responseData = await response.json();
 
       if (response.ok) {
-        return responseData._id || productId || null;
+        return responseData._id || savedProductId || null;
       }
 
       toast({
@@ -1057,9 +1062,12 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         return;
       }
 
-      if (!productId) {
-        router.replace(`/supplier/products/edit/${savedId}`);
-        return;
+      if (!savedProductId) {
+        setSavedProductId(savedId);
+        setFormData(prev => ({ ...prev, _id: savedId }));
+        if (typeof window !== 'undefined') {
+          window.history.replaceState(null, '', `/supplier/products/edit/${savedId}`);
+        }
       }
 
       setActiveTab(nextTab);
@@ -1087,7 +1095,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
 
     toast({
       title: 'Success',
-      description: productId ? 'Product updated successfully' : 'Product created successfully',
+      description: savedProductId ? 'Product updated successfully' : 'Product created successfully',
       variant: 'success',
     });
     router.push('/supplier/products');
