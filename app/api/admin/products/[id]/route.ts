@@ -2,26 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { getUserFromRequest, isVendor } from '@/lib/auth';
-import { sanitizeAttributeSelections } from '@/lib/product-attributes';
-
-const normalizeProductPayload = (payload: any) => {
-  if (!payload || typeof payload !== 'object') {
-    return payload;
-  }
-
-  return {
-    ...payload,
-    wholesalePriceType: payload.wholesalePriceType || 'Fixed',
-    sizeChartImage: payload.sizeChartImage ?? '',
-    jewelleryWeight: typeof payload.jewelleryWeight === 'number' ? payload.jewelleryWeight : 0,
-    jewelleryPurity: payload.jewelleryPurity ?? '',
-    jewelleryMakingCharges:
-      typeof payload.jewelleryMakingCharges === 'number' ? payload.jewelleryMakingCharges : 0,
-    jewelleryStoneDetails: payload.jewelleryStoneDetails ?? '',
-    jewelleryCertification: payload.jewelleryCertification ?? '',
-    attributes: sanitizeAttributeSelections(payload.attributes),
-  };
-};
+import { mongoWriteErrorMessage, normalizeProductPayload } from '@/lib/product-payload';
 
 const validateJewelleryPayload = (payload: any) => {
   if (!payload || payload.product_type !== 'Jewellery') {
@@ -166,6 +147,10 @@ export async function PUT(
     });
   } catch (error) {
     console.error('[v0] Error updating product:', error);
+    const duplicateMsg = mongoWriteErrorMessage(error);
+    if (duplicateMsg) {
+      return NextResponse.json({ error: duplicateMsg }, { status: 409 });
+    }
     const errorMessage = error instanceof Error ? error.message : 'Failed to update product';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

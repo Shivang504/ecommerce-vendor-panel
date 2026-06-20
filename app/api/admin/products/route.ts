@@ -1,27 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { getUserFromRequest, isVendor } from '@/lib/auth';
-import { sanitizeAttributeSelections } from '@/lib/product-attributes';
+import { mongoWriteErrorMessage, normalizeProductPayload } from '@/lib/product-payload';
 import { ObjectId } from 'mongodb';
-
-const normalizeProductPayload = (payload: any) => {
-  if (!payload || typeof payload !== 'object') {
-    return payload;
-  }
-
-  return {
-    ...payload,
-    wholesalePriceType: payload.wholesalePriceType || 'Fixed',
-    sizeChartImage: payload.sizeChartImage ?? '',
-    jewelleryWeight: typeof payload.jewelleryWeight === 'number' ? payload.jewelleryWeight : 0,
-    jewelleryPurity: payload.jewelleryPurity ?? '',
-    jewelleryMakingCharges:
-      typeof payload.jewelleryMakingCharges === 'number' ? payload.jewelleryMakingCharges : 0,
-    jewelleryStoneDetails: payload.jewelleryStoneDetails ?? '',
-    jewelleryCertification: payload.jewelleryCertification ?? '',
-    attributes: sanitizeAttributeSelections(payload.attributes),
-  };
-};
 
 /**
  * PERFORMANCE NOTES:
@@ -268,8 +249,13 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('[v0] Error creating product:', error);
+    const duplicateMsg = mongoWriteErrorMessage(error);
+    if (duplicateMsg) {
+      return NextResponse.json({ error: duplicateMsg }, { status: 409 });
+    }
+    const details = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to create product' },
+      { error: 'Failed to create product', details: process.env.NODE_ENV === 'development' ? details : undefined },
       { status: 500 }
     );
   }

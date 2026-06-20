@@ -990,9 +990,20 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         cleanData.lastSavedTab = nextTab;
       }
 
+      if (!cleanData.urlSlug?.trim()) {
+        delete cleanData.urlSlug;
+      } else {
+        cleanData.urlSlug = cleanData.urlSlug.trim();
+      }
+
+      const token = typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null;
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
         body: JSON.stringify(cleanData),
       });
 
@@ -1004,7 +1015,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
 
       toast({
         title: 'Error',
-        description: responseData.error || 'Failed to save product',
+        description: responseData.error || responseData.details || 'Failed to save product',
         variant: 'destructive',
       });
       return null;
