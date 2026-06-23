@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       }
 
       const normalized: VendorPickupAddress = {
-        id: action === 'update' && body.id ? String(body.id) : createPickupAddressId(),
+        id: action === 'update' && body.id && body.id !== 'legacy' ? String(body.id) : createPickupAddressId(),
         label: input.label.trim(),
         address1: input.address1.trim(),
         address2: input.address2?.trim() || undefined,
@@ -88,12 +88,16 @@ export async function POST(request: NextRequest) {
       if (action === 'update') {
         const index = addresses.findIndex(a => a.id === body.id);
         if (index === -1) {
-          return NextResponse.json({ error: 'Address not found' }, { status: 404 });
+          if (body.id !== 'legacy') {
+            return NextResponse.json({ error: 'Address not found' }, { status: 404 });
+          }
+          addresses.push({ ...normalized, isDefault: true });
+        } else {
+          if (normalized.isDefault) {
+            addresses = addresses.map(a => ({ ...a, isDefault: false }));
+          }
+          addresses[index] = { ...addresses[index], ...normalized, id: addresses[index].id };
         }
-        if (normalized.isDefault) {
-          addresses = addresses.map(a => ({ ...a, isDefault: false }));
-        }
-        addresses[index] = { ...addresses[index], ...normalized, id: addresses[index].id };
       } else {
         if (normalized.isDefault) {
           addresses = addresses.map(a => ({ ...a, isDefault: false }));
