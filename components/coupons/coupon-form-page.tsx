@@ -165,10 +165,15 @@ export function CouponFormPage({ couponId }: CouponFormPageProps) {
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch('/api/admin/products');
+      const response = await fetch('/api/admin/products?limit=500', {
+        credentials: 'include',
+      });
       if (response.ok) {
         const data = await response.json();
-        setAvailableProducts(Array.isArray(data) ? data : []);
+        const products = Array.isArray(data) ? data : data.products || [];
+        setAvailableProducts(
+          products.filter((p: { _id?: string; name?: string }) => p && p._id && p.name)
+        );
       }
     } catch (error) {
       console.error('[v0] Failed to fetch products:', error);
