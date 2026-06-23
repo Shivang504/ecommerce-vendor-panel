@@ -6,7 +6,7 @@ import { CouponList } from '@/components/coupons/coupon-list';
 export default function CouponsPage() {
   return (
     <AdminLayout>
-      <CouponList />
+      <CouponList variant='vendor' />
     </AdminLayout>
   );
 }
