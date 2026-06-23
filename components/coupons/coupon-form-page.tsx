@@ -300,8 +300,6 @@ export function CouponFormPage({ couponId }: CouponFormPageProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          applyToAllProducts: true,
-          products: [],
           status: false,
         }),
       });
@@ -571,18 +569,83 @@ export function CouponFormPage({ couponId }: CouponFormPageProps) {
                       </div>
 
                       <div className='rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900'>
-                        Product coupons are admin controlled. Vendor coupons apply to the entire store (sitewide).
+                        Turn off &quot;Apply To All Products&quot; to select specific products. Coupon will apply only on those products.
                       </div>
 
-                      <div className='flex items-center justify-between p-4 border rounded-lg bg-slate-50'>
+                      <div className='flex items-center justify-between p-4 border rounded-lg'>
                         <div>
                           <Label htmlFor='applyToAllProducts' className='text-sm font-medium'>
-                            Apply To All Products (Sitewide)
+                            Apply To All Products
                           </Label>
-                          <p className='text-xs text-muted-foreground mt-1'>Required for vendor-created coupons</p>
+                          <p className='text-xs text-muted-foreground mt-1'>
+                            {formData.applyToAllProducts ? 'Sitewide — entire store' : 'Product coupon — selected items only'}
+                          </p>
                         </div>
-                        <Switch id='applyToAllProducts' checked={true} disabled />
+                        <Switch
+                          id='applyToAllProducts'
+                          checked={formData.applyToAllProducts}
+                          onCheckedChange={checked => {
+                            updateField('applyToAllProducts', checked);
+                            if (checked) {
+                              updateField('products', []);
+                            }
+                          }}
+                        />
                       </div>
+
+                      {!formData.applyToAllProducts && (
+                        <div className='space-y-2'>
+                          <label className='text-sm font-medium text-gray-700 dark:text-slate-300'>
+                            Products <span className='text-red-500'>*</span>
+                          </label>
+                          <div className='flex gap-2'>
+                            <div className='flex-1'>
+                              <Dropdown
+                                options={[
+                                  { label: 'Select', value: '' },
+                                  ...availableProducts
+                                    .filter(p => !formData.products.includes(p._id))
+                                    .map(p => ({ label: p.name, value: p._id })),
+                                ]}
+                                placeholder='Select product'
+                                withSearch={true}
+                                value={selectedProduct}
+                                onChange={option => setSelectedProduct(option.value)}
+                              />
+                            </div>
+                            <Button
+                              type='button'
+                              onClick={handleAddProduct}
+                              disabled={!selectedProduct}
+                              className='bg-orange-500 hover:bg-orange-600'>
+                              Add
+                            </Button>
+                          </div>
+                          {formData.products.length > 0 && (
+                            <div className='flex flex-wrap gap-2 mt-2'>
+                              {formData.products.map(productId => {
+                                const product = availableProducts.find(p => p._id === productId);
+                                return (
+                                  <div
+                                    key={productId}
+                                    className='flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full text-sm'>
+                                    <span>{product?.name || productId}</span>
+                                    <button
+                                      type='button'
+                                      onClick={() => handleRemoveProduct(productId)}
+                                      className='text-red-500 hover:text-red-700'>
+                                      ×
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {getFieldError('products') && (
+                            <p className='text-red-500 text-xs mt-1'>{getFieldError('products')}</p>
+                          )}
+                        </div>
+                      )}
 
                       <div className='space-y-2'>
                         <label className='text-sm font-medium text-gray-700 dark:text-slate-300'>

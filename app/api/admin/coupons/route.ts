@@ -154,13 +154,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Amount is required and must be greater than 0' }, { status: 400 });
     }
 
-    if (vendorUser && applyToAllProducts === false) {
-      return NextResponse.json(
-        { error: 'Product coupons are admin controlled. Vendors can only create sitewide coupons.' },
-        { status: 400 }
-      );
-    }
-
     const existingCoupon = await db.collection('coupons').findOne({
       code: { $regex: new RegExp(`^${code}$`, 'i') },
     });
@@ -170,7 +163,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isDraftSave) {
-      const effectiveApplyToAll = vendorUser ? true : applyToAllProducts || false;
+      const effectiveApplyToAll = applyToAllProducts || false;
       if (!effectiveApplyToAll && (!products || products.length === 0)) {
         return NextResponse.json({ error: 'Products are required when not applying to all products' }, { status: 400 });
       }
@@ -213,7 +206,7 @@ export async function POST(request: NextRequest) {
       isExpired: isExpired || false,
       isFirstOrder: isFirstOrder || false,
       status: canBeActive,
-      applyToAllProducts: vendorUser ? true : isDraftSave ? (applyToAllProducts ?? true) : applyToAllProducts || false,
+      applyToAllProducts: isDraftSave ? (applyToAllProducts ?? true) : applyToAllProducts || false,
       products: Array.isArray(products) ? products : [],
       minimumSpend: isDraftSave ? parseFloat(minimumSpend) || 0 : parseFloat(minimumSpend) || 0,
       isUnlimited: isDraftSave ? (isUnlimited ?? true) : isUnlimited || false,

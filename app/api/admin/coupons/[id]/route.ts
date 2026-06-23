@@ -132,13 +132,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Amount is required and must be greater than 0' }, { status: 400 });
     }
 
-    if (vendorUser && applyToAllProducts === false) {
-      return NextResponse.json(
-        { error: 'Product coupons are admin controlled. Vendors can only create sitewide coupons.' },
-        { status: 400 }
-      );
-    }
-
     const codeConflict = await db.collection('coupons').findOne({
       code: { $regex: new RegExp(`^${code}$`, 'i') },
       _id: { $ne: new ObjectId(id) },
@@ -149,7 +142,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     if (!isDraftSave) {
-      const effectiveApplyToAll = vendorUser ? true : applyToAllProducts || false;
+      const effectiveApplyToAll = applyToAllProducts || false;
       if (!effectiveApplyToAll && (!products || products.length === 0)) {
         return NextResponse.json({ error: 'Products are required when not applying to all products' }, { status: 400 });
       }
@@ -194,7 +187,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       isExpired: isExpired || false,
       isFirstOrder: isFirstOrder || false,
       status: canBeActive,
-      applyToAllProducts: vendorUser ? true : applyToAllProducts || false,
+      applyToAllProducts: applyToAllProducts || false,
       products: Array.isArray(products) ? products : [],
       minimumSpend: parseFloat(minimumSpend) || 0,
       isUnlimited: isUnlimited || false,

@@ -271,7 +271,7 @@ export function CouponList({ variant = 'vendor' }: CouponListProps) {
 
       <div className='rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 flex items-start gap-2'>
         <Info className='h-4 w-4 mt-0.5 shrink-0' />
-        <p>Coupons will go LIVE only after admin approval. Product coupons are admin controlled.</p>
+        <p>Coupons will go LIVE only after admin approval. Turn off &quot;Apply To All Products&quot; to limit coupon to selected products.</p>
       </div>
 
       <div className='grid grid-cols-2 md:grid-cols-4 gap-3'>
