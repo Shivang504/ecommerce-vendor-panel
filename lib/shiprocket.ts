@@ -4,6 +4,7 @@
  */
 
 import { isShiprocketEnabled } from '@/lib/shiprocket-env';
+import { isCodPayment } from '@/lib/cod-charge';
 
 const SR_PREFIX = '[Shiprocket]';
 
@@ -1174,7 +1175,7 @@ export async function createShiprocketOrder(
       billing_phone: formatPhoneForShiprocket(orderData.billingAddress.phone),
       shipping_is_billing: shippingIsBilling,
       order_items: orderItems,
-      payment_method: orderData.paymentMethod === 'cod' ? 'COD' : 'Prepaid',
+      payment_method: isCodPayment(orderData.paymentMethod) ? 'COD' : 'Prepaid',
       sub_total: orderData.pricing.subtotal,
       length: length,
       breadth: breadth,
@@ -1197,7 +1198,7 @@ export async function createShiprocketOrder(
     requestBody.shipping_phone = formatPhoneForShiprocket(orderData.shippingAddress.phone);
 
     // Add COD amount if payment method is COD
-    if (orderData.paymentMethod === 'cod') {
+    if (isCodPayment(orderData.paymentMethod)) {
       requestBody.cod_amount = orderData.pricing.total;
     }
 
@@ -1765,14 +1766,14 @@ export async function updateShiprocketOrder(
     // Update pricing if provided
     if (updateData.pricing) {
       requestBody.sub_total = updateData.pricing.subtotal;
-      if (updateData.paymentMethod === 'cod') {
+      if (isCodPayment(updateData.paymentMethod)) {
         requestBody.cod_amount = updateData.pricing.total;
       }
     }
 
     // Update payment method if provided
     if (updateData.paymentMethod) {
-      requestBody.payment_method = updateData.paymentMethod === 'cod' ? 'COD' : 'Prepaid';
+      requestBody.payment_method = isCodPayment(updateData.paymentMethod) ? 'COD' : 'Prepaid';
     }
 
     // Update dimensions if provided

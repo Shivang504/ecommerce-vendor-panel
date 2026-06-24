@@ -70,6 +70,18 @@ interface Order {
   pickupScheduledDate?: string | Date;
   pickupScheduledTime?: string;
   readyForPickupAt?: string | Date;
+  shiprocketSync?: {
+    attempted?: boolean;
+    enabled?: boolean;
+    success?: boolean;
+    error?: string;
+    warning?: string;
+    shipmentId?: number;
+    awbCode?: string;
+    courierName?: string;
+    pickupSource?: string;
+    at?: string;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -299,11 +311,32 @@ export default function OrderDetailPage() {
       });
 
       if (response.ok) {
-        toast({
-          title: 'Success',
-          description: 'Order status updated successfully',
-          variant: 'success',
-        });
+        const data = await response.json();
+        if (data.shiprocket && !data.shiprocket.success) {
+          toast({
+            title: 'Status saved — Shiprocket issue',
+            description:
+              data.shiprocket.error ||
+              data.shiprocket.warning ||
+              data.message ||
+              'Order updated but shipment was not created in Shiprocket.',
+            variant: 'destructive',
+          });
+        } else if (data.shiprocket?.success) {
+          toast({
+            title: 'Ready for Pickup',
+            description: data.shiprocket.awbCode
+              ? `Shiprocket shipment created. AWB: ${data.shiprocket.awbCode}`
+              : 'Shiprocket shipment created successfully.',
+            variant: 'success',
+          });
+        } else {
+          toast({
+            title: 'Success',
+            description: data.message || 'Order status updated successfully',
+            variant: 'success',
+          });
+        }
         setShowStatusDialog(false);
         fetchOrder();
       } else {
@@ -1177,6 +1210,21 @@ export default function OrderDetailPage() {
                 <p>{order.customerPhone}</p>
               </div>
             </Card>
+
+            {/* Shiprocket sync status */}
+            {order.orderStatus === 'ready_for_pickup' && order.shiprocketSync && !order.shiprocketSync.success && (
+              <Card className='p-6 border-amber-300 bg-amber-50'>
+                <h2 className='text-lg font-bold text-amber-900 mb-2'>Shiprocket not synced</h2>
+                <p className='text-sm text-amber-800'>
+                  {order.shiprocketSync.error ||
+                    order.shiprocketSync.warning ||
+                    'Shipment was not created in Shiprocket. Try updating status again or contact admin.'}
+                </p>
+                {order.shiprocketSync.pickupSource && (
+                  <p className='text-xs text-amber-700 mt-2'>Pickup source: {order.shiprocketSync.pickupSource}</p>
+                )}
+              </Card>
+            )}
 
             {/* Pickup Schedule - Show when status is Ready for Pickup */}
             {order.orderStatus === 'ready_for_pickup' && (order.pickupScheduledDate || order.pickupScheduledTime) && (

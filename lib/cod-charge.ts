@@ -1,6 +1,18 @@
 import { connectToDatabase } from '@/lib/mongodb';
 import { Db } from 'mongodb';
 
+/** True when order should be sent to Shiprocket as COD */
+export function isCodPayment(paymentMethod: string | undefined): boolean {
+  if (!paymentMethod) return false;
+  const m = paymentMethod.toLowerCase().trim().replace(/\s+/g, '_');
+  return (
+    m === 'cod' ||
+    m === 'cash_on_delivery' ||
+    m.includes('cash_on_delivery') ||
+    (m.includes('cash') && m.includes('delivery'))
+  );
+}
+
 /**
  * Calculate COD charge based on settings when COD payment method is selected
  * @param paymentMethod The payment method ('cod' or 'online')
@@ -15,7 +27,7 @@ export async function calculateCodCharge(
 ): Promise<number> {
   try {
     // Charge only applies when payment method is COD
-    if (!paymentMethod || paymentMethod.toLowerCase() !== 'cod') {
+    if (!isCodPayment(paymentMethod)) {
       return 0;
     }
 

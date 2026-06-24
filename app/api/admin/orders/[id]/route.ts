@@ -8,6 +8,31 @@ import { ObjectId } from 'mongodb';
 import { getUserFromRequest, isVendor, isAdmin } from '@/lib/auth';
 import { isShiprocketEnabled } from '@/lib/shiprocket-env';
 import { resolveVendorPickupAddress } from '@/lib/vendor-pickup';
+import { isCodPayment } from '@/lib/cod-charge';
+
+interface ShiprocketSyncPayload {
+  attempted: boolean;
+  enabled: boolean;
+  success: boolean;
+  error?: string;
+  warning?: string;
+  shipmentId?: number;
+  awbCode?: string;
+  courierName?: string;
+  pickupSource?: string;
+}
+
+async function saveShiprocketSync(orderId: string, sync: ShiprocketSyncPayload) {
+  try {
+    const { db } = await connectToDatabase();
+    await db.collection('orders').updateOne(
+      { _id: new ObjectId(orderId) },
+      { $set: { shiprocketSync: { ...sync, at: new Date() }, updatedAt: new Date() } }
+    );
+  } catch (error) {
+    console.error('[Ready for Pickup] Failed to save shiprocketSync on order:', error);
+  }
+}
 
 function normalizeId(value: any): string | undefined {
   if (!value) return undefined;
@@ -116,6 +141,8 @@ export async function PUT(
       action, // 'approve_return', 'reject_return'
       rejectionReason,
     } = body;
+
+    let shiprocketSync: ShiprocketSyncPayload | undefined;
 
     // Get current order before updates
     const currentOrder = await getOrderById(id);
@@ -292,9 +319,11 @@ export async function PUT(
       await updateOrderStatus(id, orderStatus, adminNotes);
 
       if (isReadyForPickup && !shiprocketOn) {
-        console.warn(
-          '[Shiprocket] Status is Ready for Pickup but integration is OFF. Set SHIPROCKET_ENABLED=true in .env (e.g. Vercel → Settings → Environment Variables), plus SHIPROCKET_EMAIL and SHIPROCKET_API_KEY, then redeploy. Order saved in DB only — nothing is sent to Shiprocket until this is on.'
-        );
+        const warning =
+          'Shiprocket is OFF on server (set SHIPROCKET_ENABLED=true + credentials). Order status saved but no shipment created.';
+        console.warn(`[Shiprocket] ${warning}`);
+        shiprocketSync = { attempted: false, enabled: false, success: false, warning };
+        await saveShiprocketSync(id, shiprocketSync);
       }
 
       // Handle "Ready for Pickup" status - Create Shiprocket order and schedule pickup
@@ -404,7 +433,7 @@ export async function PUT(
             console.log('[Ready for Pickup] 🔍 Checking courier serviceability...', {
               pincode: currentOrder.shippingAddress.postalCode,
               weight: totalWeight,
-              codAmount: currentOrder.payment.paymentMethod === 'cod' ? currentOrder.pricing.total : 0,
+              codAmount: isCodPayment(currentOrder.payment.paymentMethod) ? currentOrder.pricing.total : 0,
               pickupPincode: vendorPickupAddress?.pincode || 'warehouse/env fallback',
               warehouseId,
             });
@@ -413,7 +442,7 @@ export async function PUT(
               currentOrder.shippingAddress.postalCode,
               vendorPickupAddress?.pincode,
               totalWeight,
-              currentOrder.payment.paymentMethod === 'cod' ? currentOrder.pricing.total : 0,
+              isCodPayment(currentOrder.payment.paymentMethod) ? currentOrder.pricing.total : 0,
               warehouseId
             );
             
@@ -522,7 +551,18 @@ export async function PUT(
                   });
                 }
               } else {
-                console.warn('[Ready for Pickup] ⚠️ No courier ID available for auto-assignment');
+                console.warn('[Ready for Pickup] ⚠️ No courier from serviceability — trying Shiprocket auto-assign AWB');
+                awbResult = await generateShiprocketAWB(shiprocketResult.shipmentId);
+                if (awbResult.success) {
+                  if (awbResult.courierName) assignedCourierName = awbResult.courierName;
+                  if (awbResult.awbCode) awbCode = awbResult.awbCode;
+                  console.log('[Ready for Pickup] ✅ AWB auto-assigned:', {
+                    awbCode,
+                    courierName: assignedCourierName,
+                  });
+                } else {
+                  console.error('[Ready for Pickup] ❌ AWB auto-assign failed:', awbResult.error);
+                }
               }
               
               // Download and store shipping label PDF
@@ -602,6 +642,17 @@ export async function PUT(
                   duration: `${pickupDuration}ms`,
                 });
                 console.log('[Ready for Pickup] ==========================================');
+
+                shiprocketSync = {
+                  attempted: true,
+                  enabled: true,
+                  success: true,
+                  shipmentId: shiprocketResult.shipmentId,
+                  awbCode: awbCode || undefined,
+                  courierName: assignedCourierName || undefined,
+                  pickupSource: vendorPickupAddress ? 'vendor_profile' : 'warehouse_or_default',
+                };
+                await saveShiprocketSync(id, shiprocketSync);
                 
                 // Fetch initial tracking data after pickup is scheduled
                 setImmediate(async () => {
@@ -626,20 +677,41 @@ export async function PUT(
                 });
               } else {
                 const pickupEndTime = Date.now();
+                const err = pickupResult.error || 'Pickup scheduling failed';
                 console.error('[Ready for Pickup] ❌ Pickup Scheduling Failed:', {
-                  error: pickupResult.error,
+                  error: err,
                   shipmentId: shiprocketResult.shipmentId,
                   duration: `${pickupEndTime - pickupStartTime}ms`,
                 });
                 console.log('[Ready for Pickup] ==========================================');
+                shiprocketSync = {
+                  attempted: true,
+                  enabled: true,
+                  success: false,
+                  error: err,
+                  shipmentId: shiprocketResult.shipmentId,
+                  awbCode: awbCode || undefined,
+                  courierName: assignedCourierName || undefined,
+                  pickupSource: vendorPickupAddress ? 'vendor_profile' : 'warehouse_or_default',
+                };
+                await saveShiprocketSync(id, shiprocketSync);
               }
             } else {
               const pickupEndTime = Date.now();
+              const err = shiprocketResult.error || 'Shiprocket order creation failed';
               console.error('[Ready for Pickup] ❌ Shiprocket order creation failed - cannot proceed:', {
-                error: shiprocketResult.error,
+                error: err,
                 duration: `${pickupEndTime - pickupStartTime}ms`,
               });
               console.log('[Ready for Pickup] ==========================================');
+              shiprocketSync = {
+                attempted: true,
+                enabled: true,
+                success: false,
+                error: err,
+                pickupSource: vendorPickupAddress ? 'vendor_profile' : 'warehouse_or_default',
+              };
+              await saveShiprocketSync(id, shiprocketSync);
             }
           } else {
             // Shipment already exists, just request pickup
@@ -679,14 +751,16 @@ export async function PUT(
           }
         } catch (shiprocketError: any) {
           const pickupEndTime = Date.now();
+          const err = shiprocketError?.message || String(shiprocketError);
           console.error('[Ready for Pickup] ❌ PICKUP GENERATION ERROR:', {
-            error: shiprocketError.message,
+            error: err,
             stack: shiprocketError.stack,
             orderNumber: currentOrder.orderNumber,
             duration: `${pickupEndTime - pickupStartTime}ms`,
           });
           console.log('[Ready for Pickup] ==========================================');
-          // Don't fail the status update if Shiprocket call fails
+          shiprocketSync = { attempted: true, enabled: true, success: false, error: err };
+          await saveShiprocketSync(id, shiprocketSync);
         }
       }
       
@@ -873,7 +947,13 @@ export async function PUT(
         ...updatedOrder,
         _id: updatedOrder?._id?.toString(),
       },
-      message: 'Order updated successfully',
+      message:
+        shiprocketSync && !shiprocketSync.success && shiprocketSync.error
+          ? `Order updated but Shiprocket failed: ${shiprocketSync.error}`
+          : shiprocketSync?.warning
+            ? `Order updated. ${shiprocketSync.warning}`
+            : 'Order updated successfully',
+      shiprocket: shiprocketSync,
     });
   } catch (error: any) {
     console.error('[Admin Order API] Error updating order:', error);
