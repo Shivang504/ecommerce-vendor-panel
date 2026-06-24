@@ -782,9 +782,256 @@ function findMatchingPickupLocation(
     const locPincode = cleanPincode(loc.pin_code);
 
     if (locName && locName === pickupName) return true;
+    if (
+      locPincode &&
+      locPincode === pincode &&
+      locName &&
+      pickupName &&
+      (locName.includes(pickupName) || pickupName.includes(locName))
+    ) {
+      return true;
+    }
     if (locPincode && locPincode === pincode && locAddress && address && locAddress === address) return true;
     return false;
   }) || null;
+}
+
+function findPickupLocationByName(
+  locations: ShiprocketPickupLocation[],
+  pickupName: string
+): ShiprocketPickupLocation | null {
+  const normalized = normalizePickupName(pickupName).toLowerCase();
+  return locations.find((loc) => loc.pickup_location?.trim().toLowerCase() === normalized) || null;
+}
+
+function isPickupLocationActive(location: ShiprocketPickupLocation): boolean {
+  return location.status === 2;
+}
+
+function parseShiprocketErrorText(responseData: any): string {
+  const raw = responseData?.message;
+  if (typeof raw !== 'string') return String(raw || '');
+  try {
+    return JSON.stringify(JSON.parse(raw));
+  } catch {
+    return raw;
+  }
+}
+
+function isInactivePickupSyncError(responseData: any): boolean {
+  return /inactive/i.test(parseShiprocketErrorText(responseData));
+}
+
+function buildPickupAliasName(originalName: string, pincode: string): string {
+  const suffix = ` ${pincode}`;
+  const maxLen = 50;
+  const base = normalizePickupName(originalName);
+  if ((base + suffix).length <= maxLen) return `${base}${suffix}`;
+  return `${base.slice(0, maxLen - suffix.length).trim()}${suffix}`;
+}
+
+function buildShiprocketPickupRequestBody(
+  pickupAddress: ShiprocketPickupAddressInput,
+  pickupLocation: string
+) {
+  const pincode = cleanPincode(pickupAddress.pincode);
+  const country = pickupAddress.country?.trim() || 'India';
+  return {
+    pickup_location: pickupLocation,
+    name: pickupAddress.contactPerson?.trim() || pickupAddress.sellerName?.trim() || pickupLocation,
+    email: pickupAddress.email.trim(),
+    phone: formatPhoneForShiprocket(pickupAddress.phone),
+    address: pickupAddress.address.trim(),
+    address_2: pickupAddress.address2?.trim() || '',
+    city: pickupAddress.city.trim(),
+    state: pickupAddress.state.trim(),
+    country,
+    pin_code: pincode,
+  };
+}
+
+async function postShiprocketPickupLocation(
+  requestBody: ReturnType<typeof buildShiprocketPickupRequestBody>
+): Promise<{ ok: boolean; status: number; data: any; text: string }> {
+  const token = await getShiprocketToken();
+  const baseUrl = process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external';
+  const requestUrl = `${baseUrl}/settings/company/addpickup`;
+
+  const response = await fetch(requestUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  const responseText = await response.text();
+  let responseData: any = {};
+  try {
+    responseData = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    responseData = { message: responseText };
+  }
+
+  return { ok: response.ok, status: response.status, data: responseData, text: responseText };
+}
+
+async function tryActivateInactivePickupLocation(
+  location: ShiprocketPickupLocation
+): Promise<ShiprocketPickupLocation> {
+  if (isPickupLocationActive(location)) {
+    return location;
+  }
+
+  const token = await getShiprocketToken();
+  const baseUrl = process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external';
+  const activateBody = {
+    id: location.id,
+    pickup_id: location.id,
+    pickup_location: location.pickup_location,
+    name: location.seller_name || location.pickup_location,
+    email: location.email,
+    phone: location.phone,
+    address: location.address,
+    address_2: location.address_2 || '',
+    city: location.city,
+    state: location.state,
+    country: location.country,
+    pin_code: location.pin_code,
+    status: 2,
+    is_active: 1,
+  };
+
+  const activateEndpoints = [
+    `${baseUrl}/settings/company/pickup/activate`,
+    `${baseUrl}/settings/company/pickup/update`,
+    `${baseUrl}/settings/company/editpickup`,
+  ];
+
+  for (const url of activateEndpoints) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(activateBody),
+      });
+      if (!response.ok) continue;
+
+      srLog('pickup_location.vendor_activated', {
+        pickupLocation: location.pickup_location,
+        endpoint: url.replace(baseUrl, ''),
+      });
+
+      const refreshed = await getShiprocketPickupLocations().catch(() => [] as ShiprocketPickupLocation[]);
+      const activated =
+        findPickupLocationByName(refreshed, location.pickup_location) ||
+        findMatchingPickupLocation(refreshed, {
+          pickupLocation: location.pickup_location,
+          address: location.address,
+          city: location.city,
+          state: location.state,
+          pincode: location.pin_code,
+          phone: location.phone,
+          email: location.email,
+        });
+      if (activated && isPickupLocationActive(activated)) {
+        return activated;
+      }
+    } catch {
+      // Shiprocket has no documented activate API; try next endpoint.
+    }
+  }
+
+  const refreshed = await getShiprocketPickupLocations().catch(() => [] as ShiprocketPickupLocation[]);
+  const latest = findPickupLocationByName(refreshed, location.pickup_location) || location;
+  if (isPickupLocationActive(latest)) {
+    srLog('pickup_location.vendor_now_active', {
+      pickupLocation: latest.pickup_location,
+      status: latest.status,
+    });
+    return latest;
+  }
+
+  srLog(
+    'pickup_location.vendor_inactive_reused',
+    {
+      pickupLocation: latest.pickup_location,
+      status: latest.status,
+      note: 'No Shiprocket activate API; using existing pickup name for order creation.',
+    },
+    'warn'
+  );
+  return latest;
+}
+
+async function resolveInactivePickupLocation(
+  pickupAddress: ShiprocketPickupAddressInput,
+  pickupLocation: string
+): Promise<ShiprocketPickupLocation | null> {
+  const refreshedLocations = await getShiprocketPickupLocations().catch(() => [] as ShiprocketPickupLocation[]);
+  const matched =
+    findMatchingPickupLocation(refreshedLocations, pickupAddress) ||
+    findPickupLocationByName(refreshedLocations, pickupLocation);
+
+  if (matched) {
+    return tryActivateInactivePickupLocation(matched);
+  }
+
+  return null;
+}
+
+async function createPickupLocationWithAlias(
+  pickupAddress: ShiprocketPickupAddressInput
+): Promise<ShiprocketPickupLocation | null> {
+  const pincode = cleanPincode(pickupAddress.pincode);
+  const aliasName = buildPickupAliasName(pickupAddress.pickupLocation, pincode);
+  const requestBody = buildShiprocketPickupRequestBody(pickupAddress, aliasName);
+
+  srLog('pickup_location.vendor_alias_sync_request', {
+    originalName: pickupAddress.pickupLocation,
+    aliasName,
+    pincode,
+  });
+
+  const { ok, status, data, text } = await postShiprocketPickupLocation(requestBody);
+  if (!ok) {
+    srLog(
+      'pickup_location.vendor_alias_sync_failed',
+      {
+        httpStatus: status,
+        aliasName,
+        message: data.message,
+        bodyPreview: previewBody(text),
+      },
+      'error'
+    );
+    return null;
+  }
+
+  srLog('pickup_location.vendor_alias_sync_success', { aliasName, response: data });
+
+  const refreshedLocations = await getShiprocketPickupLocations().catch(() => [] as ShiprocketPickupLocation[]);
+  return (
+    findPickupLocationByName(refreshedLocations, aliasName) || {
+      id: data?.address?.id || data?.pickup_id || 0,
+      pickup_location: aliasName,
+      address: requestBody.address,
+      address_2: requestBody.address_2,
+      city: requestBody.city,
+      state: requestBody.state,
+      country: requestBody.country,
+      pin_code: pincode,
+      phone: requestBody.phone,
+      email: requestBody.email,
+      seller_name: requestBody.name,
+      phone_verified: 0,
+      status: 2,
+    }
+  );
 }
 
 async function ensureShiprocketPickupLocation(
@@ -818,59 +1065,63 @@ async function ensureShiprocketPickupLocation(
   const existingLocations = await getShiprocketPickupLocations().catch(() => [] as ShiprocketPickupLocation[]);
   const existing = findMatchingPickupLocation(existingLocations, pickupAddress);
   if (existing) {
+    if (!isPickupLocationActive(existing)) {
+      const activated = await tryActivateInactivePickupLocation(existing);
+      srLog('pickup_location.vendor_existing', {
+        id: activated.id,
+        pickupLocation: activated.pickup_location,
+        pincode: activated.pin_code,
+        status: activated.status,
+        wasInactive: !isPickupLocationActive(existing),
+      });
+      return activated;
+    }
+
     srLog('pickup_location.vendor_existing', {
       id: existing.id,
       pickupLocation: existing.pickup_location,
       pincode: existing.pin_code,
+      status: existing.status,
     });
     return existing;
   }
 
   try {
-    const token = await getShiprocketToken();
-    const baseUrl = process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external';
-    const requestUrl = `${baseUrl}/settings/company/addpickup`;
-    const requestBody = {
-      pickup_location: pickupLocation,
-      name: pickupAddress.contactPerson?.trim() || pickupAddress.sellerName?.trim() || pickupLocation,
-      email: pickupAddress.email.trim(),
-      phone: formatPhoneForShiprocket(pickupAddress.phone),
-      address: pickupAddress.address.trim(),
-      address_2: pickupAddress.address2?.trim() || '',
-      city: pickupAddress.city.trim(),
-      state: pickupAddress.state.trim(),
-      country,
-      pin_code: pincode,
-    };
+    const requestBody = buildShiprocketPickupRequestBody(pickupAddress, pickupLocation);
 
     srLog('pickup_location.vendor_sync_request', {
-      url: requestUrl,
+      url: `${process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external'}/settings/company/addpickup`,
       pickupLocation,
       pincode,
       city: requestBody.city,
       state: requestBody.state,
     });
 
-    const response = await fetch(requestUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    const { ok, status, data: responseData, text: responseText } = await postShiprocketPickupLocation(requestBody);
 
-    const responseText = await response.text();
-    let responseData: any = {};
-    try {
-      responseData = responseText ? JSON.parse(responseText) : {};
-    } catch {
-      responseData = { message: responseText };
-    }
+    if (!ok) {
+      if (isInactivePickupSyncError(responseData)) {
+        const resolvedInactive = await resolveInactivePickupLocation(pickupAddress, pickupLocation);
+        if (resolvedInactive) {
+          srLog('pickup_location.vendor_inactive_resolved', {
+            pickupLocation: resolvedInactive.pickup_location,
+            status: resolvedInactive.status,
+          });
+          return resolvedInactive;
+        }
 
-    if (!response.ok) {
+        const aliasLocation = await createPickupLocationWithAlias(pickupAddress);
+        if (aliasLocation) {
+          srLog('pickup_location.vendor_inactive_alias_created', {
+            pickupLocation: aliasLocation.pickup_location,
+            status: aliasLocation.status,
+          });
+          return aliasLocation;
+        }
+      }
+
       srLog('pickup_location.vendor_sync_failed', {
-        httpStatus: response.status,
+        httpStatus: status,
         message: responseData.message,
         errors: responseData.errors,
         bodyPreview: previewBody(responseText),
@@ -910,51 +1161,69 @@ async function ensureShiprocketPickupLocation(
 }
 
 /**
- * Find pickup location ID by matching warehouse details
+ * Find pickup location by matching warehouse details
  */
-async function findPickupLocationId(warehouseName?: string, warehousePincode?: string): Promise<number | null> {
+async function findPickupLocation(
+  warehouseName?: string,
+  warehousePincode?: string
+): Promise<ShiprocketPickupLocation | null> {
   try {
     const locations = await getShiprocketPickupLocations();
-    
+
     if (locations.length === 0) {
       return null;
     }
 
-    // Try to match by name first
     if (warehouseName) {
-      const matchedByName = locations.find(loc => 
-        loc.pickup_location.toLowerCase().includes(warehouseName.toLowerCase()) ||
-        warehouseName.toLowerCase().includes(loc.pickup_location.toLowerCase())
+      const matchedByName = locations.find(
+        loc =>
+          loc.pickup_location.toLowerCase().includes(warehouseName.toLowerCase()) ||
+          warehouseName.toLowerCase().includes(loc.pickup_location.toLowerCase())
       );
       if (matchedByName) {
-        srLog('pickup_location.matched_by_name', { warehouseName, id: matchedByName.id, name: matchedByName.pickup_location });
-        return matchedByName.id;
+        srLog('pickup_location.matched_by_name', {
+          warehouseName,
+          id: matchedByName.id,
+          name: matchedByName.pickup_location,
+        });
+        return matchedByName;
       }
     }
 
-    // Try to match by pincode
     if (warehousePincode) {
       const cleanPincode = warehousePincode.replace(/\s/g, '').trim();
       const matchedByPincode = locations.find(loc => loc.pin_code === cleanPincode);
       if (matchedByPincode) {
-        srLog('pickup_location.matched_by_pincode', { pincode: cleanPincode, id: matchedByPincode.id });
-        return matchedByPincode.id;
+        srLog('pickup_location.matched_by_pincode', {
+          pincode: cleanPincode,
+          id: matchedByPincode.id,
+          name: matchedByPincode.pickup_location,
+        });
+        return matchedByPincode;
       }
     }
 
-    // Return first active location (status 2 = active)
     const activeLocation = locations.find(loc => loc.status === 2);
     if (activeLocation) {
-      srLog('pickup_location.fallback_active', { id: activeLocation.id, name: activeLocation.pickup_location }, 'warn');
-      return activeLocation.id;
+      srLog(
+        'pickup_location.fallback_active',
+        { id: activeLocation.id, name: activeLocation.pickup_location },
+        'warn'
+      );
+      return activeLocation;
     }
 
-    // Return first location as fallback
-    const fallbackId = locations[0]?.id || null;
-    srLog('pickup_location.fallback_first', { id: fallbackId }, 'warn');
-    return fallbackId;
+    const fallback = locations[0] || null;
+    if (fallback) {
+      srLog('pickup_location.fallback_first', { id: fallback.id, name: fallback.pickup_location }, 'warn');
+    }
+    return fallback;
   } catch (error: any) {
-    srLog('pickup_location.resolve_failed', { message: error.message, warehouseName, warehousePincode }, 'error');
+    srLog(
+      'pickup_location.resolve_failed',
+      { message: error.message, warehouseName, warehousePincode },
+      'error'
+    );
     return null;
   }
 }
@@ -1035,9 +1304,23 @@ export async function createShiprocketOrder(
     const token = await getShiprocketToken();
     const baseUrl = process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external';
 
-    const vendorPickupLocation = orderData.pickupAddress
+    let vendorPickupLocation = orderData.pickupAddress
       ? await ensureShiprocketPickupLocation(orderData.pickupAddress)
       : null;
+
+    if (!vendorPickupLocation && orderData.pickupAddress) {
+      const existingLocations = await getShiprocketPickupLocations().catch(() => [] as ShiprocketPickupLocation[]);
+      const matchedVendor = findMatchingPickupLocation(existingLocations, orderData.pickupAddress);
+      if (matchedVendor) {
+        vendorPickupLocation = isPickupLocationActive(matchedVendor)
+          ? matchedVendor
+          : await tryActivateInactivePickupLocation(matchedVendor);
+        srLog('pickup_location.vendor_existing_after_sync_fail', {
+          pickupLocation: vendorPickupLocation.pickup_location,
+          status: vendorPickupLocation.status,
+        });
+      }
+    }
 
     // Get warehouse details if warehouseId provided. Vendor pickup takes priority over warehouse/default.
     let warehouse = null;
@@ -1060,13 +1343,9 @@ export async function createShiprocketOrder(
       }
     }
 
-    // Find pickup location ID from Shiprocket
-    const pickupLocationId = vendorPickupLocation
+    const warehousePickupLocation = vendorPickupLocation
       ? null
-      : await findPickupLocationId(
-          warehouse?.name,
-          warehouse?.pincode
-        );
+      : await findPickupLocation(warehouse?.name, warehouse?.pincode);
 
     // Calculate total weight (default 0.5kg per item if not specified)
     // Ensure weight is in kg (convert from grams if needed)
@@ -1208,9 +1487,14 @@ export async function createShiprocketOrder(
       srLog('pickup_location.vendor_used', {
         pickupLocation: vendorPickupLocation.pickup_location,
         pincode: vendorPickupLocation.pin_code,
+        status: vendorPickupLocation.status,
       });
-    } else if (pickupLocationId) {
-      requestBody.pickup_location = pickupLocationId;
+    } else if (warehousePickupLocation) {
+      requestBody.pickup_location = warehousePickupLocation.pickup_location;
+      srLog('pickup_location.warehouse_used', {
+        pickupLocation: warehousePickupLocation.pickup_location,
+        pincode: warehousePickupLocation.pin_code,
+      });
     } else {
       const envPickupName = process.env.SHIPROCKET_PICKUP_LOCATION_NAME?.trim();
       const locations = await getShiprocketPickupLocations().catch(() => [] as ShiprocketPickupLocation[]);
@@ -1289,9 +1573,9 @@ export async function createShiprocketOrder(
         // Try to use the first suggested pickup location
         const suggestedLocations = responseData.data.data as ShiprocketPickupLocation[];
         if (suggestedLocations.length > 0) {
-          requestBody.pickup_location = suggestedLocations[0].id;
+          requestBody.pickup_location = suggestedLocations[0].pickup_location;
           srLog('create_order.retry_pickup_location', {
-            newPickupLocation: suggestedLocations[0].id,
+            newPickupLocation: suggestedLocations[0].pickup_location,
             suggested: suggestedLocations.map((s) => ({ id: s.id, name: s.pickup_location })),
           });
 
