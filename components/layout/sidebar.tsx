@@ -38,6 +38,7 @@ import {
   Warehouse as WarehouseIcon,
   BarChart3,
   ClipboardList,
+  User,
 } from 'lucide-react';
 
 
@@ -208,6 +209,13 @@ export function Sidebar() {
       submenu: true,
       type: 'cms',
       allowedRoles: ['superadmin', 'admin'],
+    },
+    {
+      label: 'Profile',
+      href: '/supplier/profile',
+      badge: null,
+      icon: User,
+      allowedRoles: ['vendor'],
     },
     {
       label: 'Settings',

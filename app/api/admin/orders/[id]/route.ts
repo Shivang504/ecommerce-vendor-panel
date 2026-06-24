@@ -17,9 +17,14 @@ interface ShiprocketSyncPayload {
   error?: string;
   warning?: string;
   shipmentId?: number;
+  shiprocketOrderId?: number;
   awbCode?: string;
   courierName?: string;
   pickupSource?: string;
+  pickupLocationUsed?: string;
+  pickupLocationRequested?: string;
+  cancelledInShiprocket?: boolean;
+  cancelledAt?: Date;
 }
 
 async function saveShiprocketSync(orderId: string, sync: ShiprocketSyncPayload) {
@@ -32,6 +37,25 @@ async function saveShiprocketSync(orderId: string, sync: ShiprocketSyncPayload) 
   } catch (error) {
     console.error('[Ready for Pickup] Failed to save shiprocketSync on order:', error);
   }
+}
+
+function readyForPickupFailedResponse(
+  currentOrder: Record<string, unknown>,
+  error: string,
+  shiprocket: ShiprocketSyncPayload
+) {
+  return NextResponse.json(
+    {
+      success: false,
+      error,
+      shiprocket,
+      order: {
+        ...currentOrder,
+        _id: (currentOrder as { _id?: { toString(): string } })._id?.toString(),
+      },
+    },
+    { status: 422 }
+  );
 }
 
 function normalizeId(value: any): string | undefined {
@@ -299,13 +323,21 @@ export async function PUT(
           // Don't fail the request if email fails
         }
 
+        const hadShiprocketShipment = Boolean(
+          (currentOrder.tracking as { shiprocketShipmentId?: number })?.shiprocketShipmentId ||
+            (currentOrder as { shiprocketSync?: { shipmentId?: number; success?: boolean } }).shiprocketSync
+              ?.shipmentId
+        );
+
         return NextResponse.json({
           success: true,
           order: {
             ...cancelledOrder,
             _id: cancelledOrder?._id?.toString(),
           },
-          message: 'Order cancelled successfully',
+          message: hadShiprocketShipment
+            ? 'Order cancelled successfully. Shiprocket shipment cancelled.'
+            : 'Order cancelled successfully',
         });
       }
       
@@ -315,15 +347,18 @@ export async function PUT(
         .replace(/\s+/g, '_');
       const isReadyForPickup = statusNormalized === 'ready_for_pickup';
       const shiprocketOn = isShiprocketEnabled();
+      const deferStatusUpdate = isReadyForPickup && shiprocketOn;
 
-      await updateOrderStatus(id, orderStatus, adminNotes);
+      if (!deferStatusUpdate) {
+        await updateOrderStatus(id, orderStatus, adminNotes);
 
-      if (isReadyForPickup && !shiprocketOn) {
-        const warning =
-          'Shiprocket is OFF on server (set SHIPROCKET_ENABLED=true + credentials). Order status saved but no shipment created.';
-        console.warn(`[Shiprocket] ${warning}`);
-        shiprocketSync = { attempted: false, enabled: false, success: false, warning };
-        await saveShiprocketSync(id, shiprocketSync);
+        if (isReadyForPickup && !shiprocketOn) {
+          const warning =
+            'Shiprocket is OFF on server (set SHIPROCKET_ENABLED=true + credentials). Order status saved but no shipment created.';
+          console.warn(`[Shiprocket] ${warning}`);
+          shiprocketSync = { attempted: false, enabled: false, success: false, warning };
+          await saveShiprocketSync(id, shiprocketSync);
+        }
       }
 
       // Handle "Ready for Pickup" status - Create Shiprocket order and schedule pickup
@@ -384,6 +419,7 @@ export async function PUT(
                   height: product?.height || item.height || 10,
                   hsn: product?.hsn || item.hsn,
                   vendorId: normalizeId(item.vendorId || product?.vendorId),
+                  vendorPickupAddressId: normalizeId(product?.vendorPickupAddressId),
                   warehouseId: normalizeId(product?.warehouseId),
                 };
               })
@@ -417,16 +453,22 @@ export async function PUT(
             const preferredVendorId = isVendor(currentUser) ? currentUser.id : undefined;
             const { vendorId: pickupVendorId, pickupAddress: vendorPickupAddress } =
               await resolveVendorPickupAddress(db, itemsWithProducts, preferredVendorId);
-            const warehouseId = vendorPickupAddress
-              ? undefined
-              : itemsWithProducts.find((item) => item.warehouseId)?.warehouseId;
-            
+
+            if (!vendorPickupAddress) {
+              const err =
+                'No valid pickup address found. Go to Profile → Pickup Addresses and add a complete address with house/flat/road number (e.g. House No 12, MG Road).';
+              shiprocketSync = { attempted: true, enabled: true, success: false, error: err };
+              await saveShiprocketSync(id, shiprocketSync);
+              return readyForPickupFailedResponse(currentOrder, err, shiprocketSync);
+            }
+
             console.log('[Ready for Pickup] 🏭 Pickup Source:', {
               vendorId: pickupVendorId || preferredVendorId || 'None',
-              source: vendorPickupAddress ? 'vendor_profile' : 'warehouse_or_shiprocket_default',
-              vendorPickupLocation: vendorPickupAddress?.pickupLocation || null,
-              vendorPickupPincode: vendorPickupAddress?.pincode || null,
-              warehouseId: warehouseId || 'default warehouse',
+              source: 'vendor_profile',
+              vendorPickupLocation: vendorPickupAddress.pickupLocation,
+              vendorPickupPincode: vendorPickupAddress.pincode,
+              vendorPickupAddressId:
+                itemsWithProducts.find((item) => item.vendorPickupAddressId)?.vendorPickupAddressId || null,
             });
             
             // Check serviceability to get fastest courier
@@ -434,16 +476,14 @@ export async function PUT(
               pincode: currentOrder.shippingAddress.postalCode,
               weight: totalWeight,
               codAmount: isCodPayment(currentOrder.payment.paymentMethod) ? currentOrder.pricing.total : 0,
-              pickupPincode: vendorPickupAddress?.pincode || 'warehouse/env fallback',
-              warehouseId,
+              pickupPincode: vendorPickupAddress.pincode,
             });
-            
+
             const serviceabilityResult = await checkShiprocketServiceability(
               currentOrder.shippingAddress.postalCode,
-              vendorPickupAddress?.pincode,
+              vendorPickupAddress.pincode,
               totalWeight,
-              isCodPayment(currentOrder.payment.paymentMethod) ? currentOrder.pricing.total : 0,
-              warehouseId
+              isCodPayment(currentOrder.payment.paymentMethod) ? currentOrder.pricing.total : 0
             );
             
             console.log('[Ready for Pickup] 📋 Serviceability Result:', {
@@ -493,7 +533,6 @@ export async function PUT(
               billingAddress: currentOrder.billingAddress,
               pricing: currentOrder.pricing,
               paymentMethod: currentOrder.payment.paymentMethod,
-              warehouseId,
               pickupAddress: vendorPickupAddress,
             });
             
@@ -543,12 +582,25 @@ export async function PUT(
                     duration: `${awbDuration}ms`,
                   });
                 } else {
+                  const awbErr = awbResult.error || 'AWB could not be assigned';
                   console.error('[Ready for Pickup] ❌ AWB Generation Failed:', {
-                    error: awbResult.error,
+                    error: awbErr,
                     shipmentId: shiprocketResult.shipmentId,
                     courierId: fastestCourierId,
                     duration: `${awbDuration}ms`,
                   });
+                  shiprocketSync = {
+                    attempted: true,
+                    enabled: true,
+                    success: false,
+                    error: awbErr,
+                    shipmentId: shiprocketResult.shipmentId,
+                    courierName: fastestCourierName,
+                    pickupSource: shiprocketResult.pickupSource || 'vendor_profile',
+                    pickupLocationUsed: shiprocketResult.pickupLocationUsed,
+                  };
+                  await saveShiprocketSync(id, shiprocketSync);
+                  return readyForPickupFailedResponse(currentOrder, awbErr, shiprocketSync);
                 }
               } else {
                 console.warn('[Ready for Pickup] ⚠️ No courier from serviceability — trying Shiprocket auto-assign AWB');
@@ -561,8 +613,35 @@ export async function PUT(
                     courierName: assignedCourierName,
                   });
                 } else {
-                  console.error('[Ready for Pickup] ❌ AWB auto-assign failed:', awbResult.error);
+                  const awbErr = awbResult.error || 'AWB could not be assigned';
+                  console.error('[Ready for Pickup] ❌ AWB auto-assign failed:', awbErr);
+                  shiprocketSync = {
+                    attempted: true,
+                    enabled: true,
+                    success: false,
+                    error: awbErr,
+                    shipmentId: shiprocketResult.shipmentId,
+                    pickupSource: shiprocketResult.pickupSource || 'vendor_profile',
+                    pickupLocationUsed: shiprocketResult.pickupLocationUsed,
+                  };
+                  await saveShiprocketSync(id, shiprocketSync);
+                  return readyForPickupFailedResponse(currentOrder, awbErr, shiprocketSync);
                 }
+              }
+
+              if (!awbCode) {
+                const awbErr = 'AWB could not be assigned. Please try again or contact support.';
+                shiprocketSync = {
+                  attempted: true,
+                  enabled: true,
+                  success: false,
+                  error: awbErr,
+                  shipmentId: shiprocketResult.shipmentId,
+                  pickupSource: shiprocketResult.pickupSource || 'vendor_profile',
+                  pickupLocationUsed: shiprocketResult.pickupLocationUsed,
+                };
+                await saveShiprocketSync(id, shiprocketSync);
+                return readyForPickupFailedResponse(currentOrder, awbErr, shiprocketSync);
               }
               
               // Download and store shipping label PDF
@@ -609,6 +688,8 @@ export async function PUT(
               const pickupResult = await requestShiprocketPickup(shiprocketResult.shipmentId);
               
               if (pickupResult.success) {
+                await updateOrderStatus(id, orderStatus, adminNotes);
+
                 // Store pickup schedule in order and ensure tracking info is updated
                 await db.collection('orders').updateOne(
                   { _id: new ObjectId(id) },
@@ -648,9 +729,11 @@ export async function PUT(
                   enabled: true,
                   success: true,
                   shipmentId: shiprocketResult.shipmentId,
+                  shiprocketOrderId: awbResult?.orderId || shiprocketResult.shiprocketOrderId,
                   awbCode: awbCode || undefined,
                   courierName: assignedCourierName || undefined,
-                  pickupSource: vendorPickupAddress ? 'vendor_profile' : 'warehouse_or_default',
+                  pickupSource: shiprocketResult.pickupSource || 'vendor_profile',
+                  pickupLocationUsed: shiprocketResult.pickupLocationUsed,
                 };
                 await saveShiprocketSync(id, shiprocketSync);
                 
@@ -692,9 +775,11 @@ export async function PUT(
                   shipmentId: shiprocketResult.shipmentId,
                   awbCode: awbCode || undefined,
                   courierName: assignedCourierName || undefined,
-                  pickupSource: vendorPickupAddress ? 'vendor_profile' : 'warehouse_or_default',
+                  pickupSource: shiprocketResult.pickupSource || 'vendor_profile',
+                  pickupLocationUsed: shiprocketResult.pickupLocationUsed,
                 };
                 await saveShiprocketSync(id, shiprocketSync);
+                return readyForPickupFailedResponse(currentOrder, err, shiprocketSync);
               }
             } else {
               const pickupEndTime = Date.now();
@@ -709,9 +794,12 @@ export async function PUT(
                 enabled: true,
                 success: false,
                 error: err,
-                pickupSource: vendorPickupAddress ? 'vendor_profile' : 'warehouse_or_default',
+                pickupSource: shiprocketResult.pickupSource || 'vendor_profile_failed',
+                pickupLocationUsed: shiprocketResult.pickupLocationUsed,
+                pickupLocationRequested: shiprocketResult.pickupLocationRequested || vendorPickupAddress.pickupLocation,
               };
               await saveShiprocketSync(id, shiprocketSync);
+              return readyForPickupFailedResponse(currentOrder, err, shiprocketSync);
             }
           } else {
             // Shipment already exists, just request pickup
@@ -719,6 +807,8 @@ export async function PUT(
             const pickupResult = await requestShiprocketPickup(existingShipmentId);
             
             if (pickupResult.success) {
+              await updateOrderStatus(id, orderStatus, adminNotes);
+
               await db.collection('orders').updateOne(
                 { _id: new ObjectId(id) },
                 {
@@ -741,12 +831,22 @@ export async function PUT(
               console.log('[Ready for Pickup] ==========================================');
             } else {
               const pickupEndTime = Date.now();
+              const err = pickupResult.error || 'Pickup scheduling failed';
               console.error('[Ready for Pickup] ❌ Pickup Rescheduling Failed:', {
-                error: pickupResult.error,
+                error: err,
                 shipmentId: existingShipmentId,
                 duration: `${pickupEndTime - pickupStartTime}ms`,
               });
               console.log('[Ready for Pickup] ==========================================');
+              shiprocketSync = {
+                attempted: true,
+                enabled: true,
+                success: false,
+                error: err,
+                shipmentId: existingShipmentId,
+              };
+              await saveShiprocketSync(id, shiprocketSync);
+              return readyForPickupFailedResponse(currentOrder, err, shiprocketSync);
             }
           }
         } catch (shiprocketError: any) {
@@ -761,6 +861,7 @@ export async function PUT(
           console.log('[Ready for Pickup] ==========================================');
           shiprocketSync = { attempted: true, enabled: true, success: false, error: err };
           await saveShiprocketSync(id, shiprocketSync);
+          return readyForPickupFailedResponse(currentOrder, err, shiprocketSync);
         }
       }
       
@@ -1058,13 +1159,20 @@ export async function DELETE(
       // Don't fail the request if email fails
     }
 
+    const hadShiprocketShipment = Boolean(
+      (cancelledOrder?.tracking as { shiprocketShipmentId?: number })?.shiprocketShipmentId ||
+        (cancelledOrder as { shiprocketSync?: { shipmentId?: number } })?.shiprocketSync?.shipmentId
+    );
+
     return NextResponse.json({
       success: true,
       order: {
         ...cancelledOrder,
         _id: cancelledOrder?._id?.toString(),
       },
-      message: 'Order cancelled successfully',
+      message: hadShiprocketShipment
+        ? 'Order cancelled successfully. Shiprocket shipment cancelled.'
+        : 'Order cancelled successfully',
     });
   } catch (error: any) {
     console.error('[Admin Order API] Error cancelling order:', error);

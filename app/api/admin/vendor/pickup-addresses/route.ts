@@ -3,10 +3,14 @@ import { getUserFromRequest, isVendor } from '@/lib/auth';
 import { getVendorById, updateVendor } from '@/lib/models/vendor';
 import {
   createPickupAddressId,
+  getMutablePickupAddresses,
   normalizePickupAddresses,
+  toShiprocketPickupInput,
   validatePickupAddressInput,
   type VendorPickupAddress,
 } from '@/lib/vendor-pickup';
+import { isShiprocketEnabled } from '@/lib/shiprocket-env';
+import { syncVendorPickupToShiprocket } from '@/lib/shiprocket';
 
 function syncLegacyVendorFields(addresses: VendorPickupAddress[]) {
   const defaultAddress = addresses.find(a => a.isDefault) || addresses[0];
@@ -61,13 +65,29 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const action = body.action as 'add' | 'update' | 'delete' | 'setDefault';
-    let addresses = normalizePickupAddresses(vendor).filter(a => a.id !== 'legacy');
+    let addresses = getMutablePickupAddresses(vendor);
 
     if (action === 'add' || action === 'update') {
       const input = body.address || {};
       const errors = validatePickupAddressInput(input, vendor);
       if (Object.keys(errors).length > 0) {
         return NextResponse.json({ error: 'Validation failed', fieldErrors: errors }, { status: 400 });
+      }
+
+      const labelKey = input.label.trim().toLowerCase();
+      const duplicateLabel = addresses.find(
+        (addr) =>
+          addr.label.trim().toLowerCase() === labelKey &&
+          (action === 'add' || addr.id !== body.id)
+      );
+      if (duplicateLabel) {
+        return NextResponse.json(
+          {
+            error: 'Validation failed',
+            fieldErrors: { label: 'A pickup address with this name already exists' },
+          },
+          { status: 400 }
+        );
       }
 
       const normalized: VendorPickupAddress = {
@@ -82,7 +102,7 @@ export async function POST(request: NextRequest) {
         phone: (input.phone || vendor.phone || '').replace(/\D/g, '').slice(-10) || undefined,
         email: (input.email || vendor.email || '').trim().toLowerCase() || undefined,
         contactPerson: input.contactPerson?.trim() || vendor.ownerName || undefined,
-        isDefault: addresses.length === 0 ? true : !!input.isDefault,
+        isDefault: addresses.length === 0 ? true : Boolean(input.isDefault),
       };
 
       if (action === 'update') {
@@ -128,12 +148,67 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
+    let shiprocketSync:
+      | {
+          success: boolean;
+          verified: boolean;
+          active: boolean;
+          verificationRequired?: boolean;
+          verifyPhone?: string;
+          error?: string;
+          pickupLocation?: string;
+        }
+      | undefined;
+
+    if ((action === 'add' || action === 'update') && isShiprocketEnabled()) {
+      const savedAddress =
+        action === 'update'
+          ? addresses.find((a) => a.id === (body.id === 'legacy' ? addresses.at(-1)?.id : body.id))
+          : addresses[addresses.length - 1];
+
+      if (savedAddress) {
+        const vendorForSync = {
+          ...vendor,
+          pickupAddresses: addresses,
+          phone: savedAddress.phone || vendor.phone,
+          email: savedAddress.email || vendor.email,
+          storeName: vendor.storeName,
+          ownerName: savedAddress.contactPerson || vendor.ownerName,
+        };
+        const pickupInput = toShiprocketPickupInput(vendorForSync, savedAddress);
+
+        if (pickupInput) {
+          shiprocketSync = await syncVendorPickupToShiprocket(pickupInput);
+          const idx = addresses.findIndex((a) => a.id === savedAddress.id);
+          if (idx !== -1) {
+            addresses[idx] = {
+              ...addresses[idx],
+              shiprocketPickupCode: shiprocketSync.pickupLocation || savedAddress.label,
+              shiprocketPickupId: shiprocketSync.pickupId,
+              shiprocketVerified: shiprocketSync.verified && shiprocketSync.active,
+              shiprocketSyncError: shiprocketSync.error,
+              shiprocketSyncedAt: new Date().toISOString(),
+            };
+          }
+        }
+      }
+    }
+
     await updateVendor(currentUser.id, {
       pickupAddresses: addresses,
       ...syncLegacyVendorFields(addresses),
     } as any);
 
-    return NextResponse.json({ success: true, addresses });
+    return NextResponse.json({
+      success: true,
+      addresses,
+      shiprocket: shiprocketSync,
+      message: shiprocketSync?.verificationRequired
+        ? shiprocketSync.error
+        : shiprocketSync?.success
+          ? 'Pickup address saved and synced to Shiprocket'
+          : undefined,
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to save pickup address' }, { status: 500 });
   }

@@ -22,7 +22,7 @@ export function Sidebar({ onLogout }: SidebarProps) {
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/supplier' },
     { icon: Package, label: 'Products', href: '/supplier/products' },
-    { icon: Settings, label: 'Settings', href: '/supplier/settings' },
+    { icon: Settings, label: 'Profile & Settings', href: '/supplier/profile' },
   ];
 
   const isActive = (href: string) => pathname === href;

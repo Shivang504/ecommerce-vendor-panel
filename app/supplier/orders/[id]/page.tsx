@@ -312,7 +312,13 @@ export default function OrderDetailPage() {
 
       if (response.ok) {
         const data = await response.json();
-        if (data.shiprocket && !data.shiprocket.success) {
+        if (orderStatus === 'cancelled') {
+          toast({
+            title: 'Order Cancelled',
+            description: data.message || 'Order cancelled successfully.',
+            variant: 'success',
+          });
+        } else if (data.shiprocket && !data.shiprocket.success) {
           toast({
             title: 'Status saved — Shiprocket issue',
             description:
@@ -342,8 +348,12 @@ export default function OrderDetailPage() {
       } else {
         const data = await response.json();
         toast({
-          title: 'Error',
-          description: data.error || 'Failed to update status',
+          title: orderStatus === 'ready_for_pickup' ? 'Ready for Pickup failed' : 'Error',
+          description:
+            data.error ||
+            data.shiprocket?.error ||
+            data.shiprocket?.warning ||
+            'Failed to update order status',
           variant: 'destructive',
         });
       }
@@ -1211,18 +1221,15 @@ export default function OrderDetailPage() {
               </div>
             </Card>
 
-            {/* Shiprocket sync status */}
-            {order.orderStatus === 'ready_for_pickup' && order.shiprocketSync && !order.shiprocketSync.success && (
+            {/* Shiprocket sync status — shown when last Ready for Pickup attempt failed */}
+            {order.shiprocketSync && !order.shiprocketSync.success && (
               <Card className='p-6 border-amber-300 bg-amber-50'>
-                <h2 className='text-lg font-bold text-amber-900 mb-2'>Shiprocket not synced</h2>
+                <h2 className='text-lg font-bold text-amber-900 mb-2'>Ready for Pickup failed</h2>
                 <p className='text-sm text-amber-800'>
                   {order.shiprocketSync.error ||
                     order.shiprocketSync.warning ||
-                    'Shipment was not created in Shiprocket. Try updating status again or contact admin.'}
+                    'Shipment was not created in Shiprocket. Fix your pickup address and try again.'}
                 </p>
-                {order.shiprocketSync.pickupSource && (
-                  <p className='text-xs text-amber-700 mt-2'>Pickup source: {order.shiprocketSync.pickupSource}</p>
-                )}
               </Card>
             )}
 

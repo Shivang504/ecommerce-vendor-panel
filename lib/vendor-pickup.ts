@@ -2,6 +2,8 @@ import { ObjectId } from 'mongodb';
 import type { ShiprocketPickupAddressInput } from '@/lib/shiprocket';
 import { getVendorById } from '@/lib/models/vendor';
 
+export { validatePickupAddressInput } from '@/lib/vendor-pickup-validation';
+
 export interface VendorPickupAddress {
   id: string;
   label: string;
@@ -15,22 +17,21 @@ export interface VendorPickupAddress {
   email?: string;
   contactPerson?: string;
   isDefault: boolean;
+  shiprocketPickupCode?: string;
+  shiprocketPickupId?: number;
+  shiprocketVerified?: boolean;
+  shiprocketSyncError?: string;
+  shiprocketSyncedAt?: string;
 }
 
-/** Shiprocket needs address line >= 10 characters */
-export function formatPickupAddressLine(
-  address1: string,
-  address2?: string,
-  city?: string,
-  state?: string
-): string {
-  const primary = (address1 || '').trim();
-  if (primary.length >= 10) {
-    return primary.slice(0, 80);
-  }
-  const combined = [primary, address2, city, state].filter(Boolean).join(', ').trim();
-  const line = combined.length >= 10 ? combined : combined.padEnd(10, '.');
-  return line.slice(0, 80);
+/** Shiprocket requires a house/flat/road number (digit) in the street address */
+export function hasShiprocketAddressNumber(...parts: Array<string | undefined>): boolean {
+  return parts.some((part) => /\d/.test((part || '').trim()));
+}
+
+/** Pass vendor address as entered — validation happens when saving pickup addresses */
+export function formatPickupAddressLine(address1: string): string {
+  return (address1 || '').trim().slice(0, 80);
 }
 
 export function normalizePickupAddresses(vendor: Record<string, any> | null | undefined): VendorPickupAddress[] {
@@ -70,6 +71,25 @@ export function getDefaultPickupAddress(vendor: Record<string, any> | null | und
   return addresses.find(a => a.isDefault) || addresses[0] || null;
 }
 
+export function getPickupAddressById(
+  vendor: Record<string, any> | null | undefined,
+  addressId?: string | null
+): VendorPickupAddress | null {
+  if (!addressId) return null;
+  const addresses = normalizePickupAddresses(vendor);
+  return addresses.find(a => a.id === addressId) || null;
+}
+
+export function resolvePickupAddressForVendor(
+  vendor: Record<string, any>,
+  preferredAddressId?: string | null
+): VendorPickupAddress | null {
+  return (
+    getPickupAddressById(vendor, preferredAddressId) ||
+    getDefaultPickupAddress(vendor)
+  );
+}
+
 export function toShiprocketPickupInput(
   vendor: Record<string, any>,
   address: VendorPickupAddress
@@ -78,13 +98,23 @@ export function toShiprocketPickupInput(
   const email = (address.email || vendor.email || '').trim();
   const label = (address.label || vendor.storeName || 'Vendor Pickup').trim();
 
-  if (!label || !address.address1 || !address.city || !address.state || !/^\d{6}$/.test(address.pinCode) || phone.length !== 10 || !email) {
+  if (
+    !label ||
+    !address.address1 ||
+    address.address1.trim().length < 10 ||
+    !hasShiprocketAddressNumber(address.address1, address.address2) ||
+    !address.city ||
+    !address.state ||
+    !/^\d{6}$/.test(address.pinCode) ||
+    phone.length !== 10 ||
+    !email
+  ) {
     return null;
   }
 
   return {
     pickupLocation: label.slice(0, 50),
-    address: formatPickupAddressLine(address.address1, address.address2, address.city, address.state),
+    address: formatPickupAddressLine(address.address1),
     address2: address.address2?.trim() || undefined,
     city: address.city.trim(),
     state: address.state.trim(),
@@ -101,46 +131,36 @@ export function createPickupAddressId(): string {
   return new ObjectId().toString();
 }
 
-export function validatePickupAddressInput(
-  input: Partial<VendorPickupAddress>,
-  vendor?: Record<string, any>
-): Record<string, string> {
-  const errors: Record<string, string> = {};
+/** Addresses stored on vendor doc for add/update/delete (migrates legacy single address). */
+export function getMutablePickupAddresses(vendor: Record<string, any> | null | undefined): VendorPickupAddress[] {
+  if (!vendor) return [];
 
-  if (!input.label?.trim() || input.label.trim().length < 3) {
-    errors.label = 'Location name must be at least 3 characters';
-  }
-  if (!input.address1?.trim() || input.address1.trim().length < 5) {
-    errors.address1 = 'Street address must be at least 5 characters';
-  }
-  if (!input.city?.trim()) {
-    errors.city = 'City is required';
-  }
-  if (!input.state?.trim()) {
-    errors.state = 'State is required';
-  }
-  if (!input.pinCode?.trim() || !/^\d{6}$/.test(input.pinCode.replace(/\D/g, ''))) {
-    errors.pinCode = 'Enter a valid 6-digit pincode';
+  if (Array.isArray(vendor.pickupAddresses) && vendor.pickupAddresses.length > 0) {
+    return vendor.pickupAddresses.map((addr: VendorPickupAddress) => ({
+      ...addr,
+      country: addr.country || 'India',
+    }));
   }
 
-  const phone = (input.phone || vendor?.phone || '').replace(/\D/g, '');
-  if (phone && phone.length !== 10) {
-    errors.phone = 'Enter a valid 10-digit phone number';
-  }
+  const legacyAddresses = normalizePickupAddresses(vendor);
+  if (legacyAddresses.length === 0) return [];
 
-  const email = (input.email || vendor?.email || '').trim();
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errors.email = 'Enter a valid email address';
-  }
-
-  return errors;
+  return legacyAddresses.map((addr) =>
+    addr.id === 'legacy'
+      ? { ...addr, id: createPickupAddressId(), isDefault: true }
+      : addr
+  );
 }
 
 export async function resolveVendorPickupAddress(
   db: any,
-  items: Array<{ vendorId?: string }>,
+  items: Array<{ vendorId?: string; vendorPickupAddressId?: string }>,
   preferredVendorId?: string
-): Promise<{ vendorId?: string; pickupAddress: ShiprocketPickupAddressInput | null }> {
+): Promise<{
+  vendorId?: string;
+  pickupAddress: ShiprocketPickupAddressInput | null;
+  vendorPickupAddressId?: string;
+}> {
   const vendorIds = preferredVendorId
     ? [preferredVendorId]
     : Array.from(
@@ -164,23 +184,32 @@ export async function resolveVendorPickupAddress(
         continue;
       }
 
-      const defaultAddress = getDefaultPickupAddress(vendor);
-      if (!defaultAddress) {
+      const preferredAddressId = items.find(
+        item => item.vendorId && String(item.vendorId) === vendorId && item.vendorPickupAddressId
+      )?.vendorPickupAddressId;
+
+      const selectedAddress = resolvePickupAddressForVendor(vendor, preferredAddressId);
+      if (!selectedAddress) {
         console.warn('[Vendor Pickup] No pickup address on vendor profile:', vendorId);
         continue;
       }
 
-      const pickupAddress = toShiprocketPickupInput(vendor, defaultAddress);
+      const pickupAddress = toShiprocketPickupInput(vendor, selectedAddress);
       if (pickupAddress) {
-        return { vendorId, pickupAddress };
+        return {
+          vendorId,
+          pickupAddress,
+          vendorPickupAddressId: selectedAddress.id,
+        };
       }
 
       console.warn('[Vendor Pickup] Pickup address incomplete for Shiprocket:', {
         vendorId,
-        label: defaultAddress.label,
-        pinCode: defaultAddress.pinCode,
-        hasPhone: !!(defaultAddress.phone || vendor.phone),
-        hasEmail: !!(defaultAddress.email || vendor.email),
+        label: selectedAddress.label,
+        addressId: selectedAddress.id,
+        pinCode: selectedAddress.pinCode,
+        hasPhone: !!(selectedAddress.phone || vendor.phone),
+        hasEmail: !!(selectedAddress.email || vendor.email),
       });
     } catch (error) {
       console.warn('[Vendor Pickup] Could not resolve pickup address:', {

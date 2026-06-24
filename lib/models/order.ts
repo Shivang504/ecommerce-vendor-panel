@@ -1,6 +1,5 @@
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
-import { isShiprocketEnabled } from '@/lib/shiprocket-env';
 
 export type OrderStatus = 
   | 'pending' // Order Placed
@@ -586,6 +585,38 @@ export async function updateTrackingInfo(
   }
 }
 
+async function cancelLinkedShiprocketOrder(order: Order): Promise<{ skipped: boolean; success: boolean }> {
+  const { cancelShiprocketForOrder } = await import('@/lib/shiprocket');
+  const result = await cancelShiprocketForOrder(order as Record<string, unknown>);
+
+  if (result.skipped) {
+    return { skipped: true, success: true };
+  }
+
+  if (!result.success) {
+    throw new Error(
+      result.error ||
+        'Could not cancel this order in Shiprocket. Cancel it in Shiprocket panel first, then try again.'
+    );
+  }
+
+  return { skipped: false, success: true };
+}
+
+function buildShiprocketCancelSync(order: Order) {
+  const existingSync = (order as Record<string, unknown>).shiprocketSync;
+  const sync =
+    existingSync && typeof existingSync === 'object'
+      ? { ...(existingSync as Record<string, unknown>) }
+      : {};
+
+  return {
+    ...sync,
+    cancelledInShiprocket: true,
+    cancelledAt: new Date(),
+  };
+}
+
 // Cancel order (customer - same as admin cancelOrder)
 export async function requestCancellation(orderId: string, reason?: string) {
   try {
@@ -599,24 +630,7 @@ export async function requestCancellation(orderId: string, reason?: string) {
       throw new Error('Cannot cancel order that has been shipped');
     }
 
-    // Cancel Shiprocket order if shipment exists
-    const shipmentId = (order.tracking as any)?.shiprocketShipmentId;
-    const shiprocketOrderId = (order.tracking as any)?.shiprocketOrderId; // Numeric order_id from Shiprocket
-    
-    if (shipmentId && isShiprocketEnabled()) {
-      try {
-        const { cancelShiprocketOrder } = await import('@/lib/shiprocket');
-        // Pass shiprocketOrderId (numeric) if available, otherwise fallback to orderNumber
-        const cancelResult = await cancelShiprocketOrder(shipmentId, shiprocketOrderId ? undefined : order.orderNumber, shiprocketOrderId);
-        if (!cancelResult.success) {
-          console.error('[Order] ❌ Failed to cancel Shiprocket order (requestCancellation):', cancelResult.error);
-          // Don't fail order cancellation if Shiprocket cancel fails - log and continue
-        }
-      } catch (shiprocketError) {
-        console.error('[Order] ❌ Error cancelling Shiprocket order (requestCancellation):', shiprocketError);
-        // Don't fail order cancellation if Shiprocket cancel fails
-      }
-    }
+    const shiprocketCancel = await cancelLinkedShiprocketOrder(order);
 
     // Increment stock back for all items when order is cancelled
     const { incrementStock } = await import('@/lib/models/inventory');
@@ -650,6 +664,10 @@ export async function requestCancellation(orderId: string, reason?: string) {
 
     if (reason) {
       updateData.adminNotes = reason;
+    }
+
+    if (!shiprocketCancel.skipped) {
+      updateData.shiprocketSync = buildShiprocketCancelSync(order);
     }
 
     // If paid, mark for refund (same as admin)
@@ -688,24 +706,7 @@ export async function cancelOrder(orderId: string, reason?: string) {
       throw new Error('Cannot cancel order that has been shipped');
     }
 
-    // Cancel Shiprocket order if shipment exists
-    const shipmentId = (order.tracking as any)?.shiprocketShipmentId;
-    const shiprocketOrderId = (order.tracking as any)?.shiprocketOrderId; // Numeric order_id from Shiprocket
-    
-    if (shipmentId && isShiprocketEnabled()) {
-      try {
-        const { cancelShiprocketOrder } = await import('@/lib/shiprocket');
-        // Pass shiprocketOrderId (numeric) if available, otherwise fallback to orderNumber
-        const cancelResult = await cancelShiprocketOrder(shipmentId, shiprocketOrderId ? undefined : order.orderNumber, shiprocketOrderId);
-        if (!cancelResult.success) {
-          console.error('[Order] ❌ Failed to cancel Shiprocket order:', cancelResult.error);
-          // Don't fail order cancellation if Shiprocket cancel fails - log and continue
-        }
-      } catch (shiprocketError) {
-        console.error('[Order] ❌ Error cancelling Shiprocket order:', shiprocketError);
-        // Don't fail order cancellation if Shiprocket cancel fails
-      }
-    }
+    const shiprocketCancel = await cancelLinkedShiprocketOrder(order);
 
     // Increment stock back for all items when order is cancelled
     const { incrementStock } = await import('@/lib/models/inventory');
@@ -739,6 +740,10 @@ export async function cancelOrder(orderId: string, reason?: string) {
 
     if (reason) {
       updateData.adminNotes = reason;
+    }
+
+    if (!shiprocketCancel.skipped) {
+      updateData.shiprocketSync = buildShiprocketCancelSync(order);
     }
 
     // If paid, mark for refund
@@ -982,21 +987,7 @@ export async function requestItemCancellation(orderId: string, itemIndex: number
       }
     }
 
-    // Cancel Shiprocket order if shipment exists (order-wise cancellation)
-    const shipmentId = (order.tracking as any)?.shiprocketShipmentId;
-    const shiprocketOrderId = (order.tracking as any)?.shiprocketOrderId;
-    
-    if (shipmentId && isShiprocketEnabled()) {
-      try {
-        const { cancelShiprocketOrder } = await import('@/lib/shiprocket');
-        const cancelResult = await cancelShiprocketOrder(shipmentId, shiprocketOrderId ? undefined : order.orderNumber, shiprocketOrderId);
-        if (!cancelResult.success) {
-          console.error('[Order] ❌ Failed to cancel Shiprocket order (requestItemCancellation):', cancelResult.error);
-        }
-      } catch (shiprocketError) {
-        console.error('[Order] ❌ Error cancelling Shiprocket order (requestItemCancellation):', shiprocketError);
-      }
-    }
+    const shiprocketCancel = await cancelLinkedShiprocketOrder(order);
 
     const { db } = await connectToDatabase();
     const updatePath = `items.${itemIndex}.cancelReturnInfo`;
@@ -1033,6 +1024,10 @@ export async function requestItemCancellation(orderId: string, itemIndex: number
       updateData.refundedAt = new Date();
     } else {
       updateData.paymentStatus = 'cancelled';
+    }
+
+    if (!shiprocketCancel.skipped) {
+      updateData.shiprocketSync = buildShiprocketCancelSync(order);
     }
 
     const result = await db.collection('orders').findOneAndUpdate(

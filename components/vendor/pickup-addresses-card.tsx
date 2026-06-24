@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { INDIAN_STATES } from '@/lib/indian-address';
+import { validatePickupAddressInput } from '@/lib/vendor-pickup-validation';
 
 type PickupAddress = {
   id: string;
@@ -21,6 +22,11 @@ type PickupAddress = {
   email?: string;
   contactPerson?: string;
   isDefault: boolean;
+  shiprocketPickupCode?: string;
+  shiprocketPickupId?: number;
+  shiprocketVerified?: boolean;
+  shiprocketSyncError?: string;
+  shiprocketSyncedAt?: string;
 };
 
 const emptyForm = {
@@ -33,7 +39,7 @@ const emptyForm = {
   phone: '',
   email: '',
   contactPerson: '',
-  isDefault: true,
+  isDefault: false,
 };
 
 export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
@@ -45,6 +51,7 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [vendorDefaults, setVendorDefaults] = useState<{ phone?: string; email?: string; ownerName?: string }>({});
 
   const authHeaders = () => {
     const token = localStorage.getItem('adminToken');
@@ -68,6 +75,11 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
       if (!response.ok) throw new Error('Failed to load pickup addresses');
       const data = await response.json();
       setAddresses(data.addresses || []);
+      setVendorDefaults({
+        phone: data.phone || '',
+        email: data.email || '',
+        ownerName: data.ownerName || '',
+      });
     } catch {
       toast({
         title: 'Failed to load pickup addresses',
@@ -108,7 +120,37 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
     setFieldErrors({});
   };
 
+  const updateFormField = (field: keyof typeof emptyForm, value: string | boolean) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+    setFieldErrors(prev => {
+      if (!prev[field as string]) return prev;
+      const next = { ...prev };
+      delete next[field as string];
+      return next;
+    });
+  };
+
   const saveAddress = async () => {
+    const validationErrors = validatePickupAddressInput(form, vendorDefaults);
+    const duplicateLabel = addresses.find(
+      addr =>
+        addr.label.trim().toLowerCase() === form.label.trim().toLowerCase() &&
+        addr.id !== editingId
+    );
+    if (duplicateLabel) {
+      validationErrors.label = 'A pickup address with this name already exists';
+    }
+
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors(validationErrors);
+      toast({
+        title: 'Please fix the highlighted fields',
+        description: 'Check required fields and correct any errors before saving.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       setSaving(true);
       const response = await fetch('/api/admin/vendor/pickup-addresses', {
@@ -128,7 +170,29 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
       }
       setAddresses(data.addresses || []);
       resetForm();
-      toast({ title: 'Pickup address saved', description: 'This address will be used for Shiprocket pickup.' });
+      if (data.shiprocket?.verificationRequired) {
+        toast({
+          title: 'Saved — Shiprocket verification needed',
+          description:
+            data.message ||
+            data.shiprocket.error ||
+            'Verify this address in Shiprocket panel (OTP on registered phone).',
+          variant: 'destructive',
+        });
+      } else if (data.shiprocket && !data.shiprocket.success) {
+        toast({
+          title: 'Address saved — Shiprocket sync failed',
+          description: data.shiprocket.error || data.message || 'Could not sync to Shiprocket.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Pickup address saved',
+          description: data.shiprocket?.success
+            ? 'Synced and verified in Shiprocket.'
+            : 'This address will be used for Shiprocket pickup.',
+        });
+      }
     } catch (error: any) {
       toast({
         title: 'Save failed',
@@ -152,7 +216,7 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to update default address');
       setAddresses(data.addresses || []);
-      toast({ title: 'Default pickup address updated' });
+      toast({ title: 'Primary pickup address updated' });
     } catch (error: any) {
       toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
     } finally {
@@ -190,8 +254,8 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
           Pickup Addresses
         </CardTitle>
         <CardDescription>
-          Add warehouse/pickup locations. The default address is sent to Shiprocket when you mark orders Ready for Pickup.
-          If the address is not in Shiprocket, it will be added automatically.
+          Add warehouse/pickup locations. Addresses sync to Shiprocket on save using your account verified phone.
+          New addresses must be verified once in Shiprocket (Settings → Pickup Addresses → OTP).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -220,7 +284,7 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
                         {address.isDefault && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
                             <Star className="h-3 w-3 fill-current" />
-                            Default
+                            Primary
                           </span>
                         )}
                       </div>
@@ -229,11 +293,21 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
                       <p className="text-sm text-gray-600">
                         {address.city}, {address.state} - {address.pinCode}
                       </p>
+                      {address.shiprocketSyncedAt && (
+                        <p
+                          className={`text-xs mt-2 ${
+                            address.shiprocketVerified ? 'text-green-700' : 'text-amber-700'
+                          }`}>
+                          {address.shiprocketVerified
+                            ? 'Shiprocket: Verified'
+                            : `Shiprocket: Pending verification${address.shiprocketSyncError ? ` — ${address.shiprocketSyncError}` : ''}`}
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-col gap-2">
                       {!address.isDefault && (
                         <Button size="sm" variant="outline" disabled={saving} onClick={() => setDefault(address.id)}>
-                          Make Default
+                          Make Primary
                         </Button>
                       )}
                       <Button size="sm" variant="outline" disabled={saving} onClick={() => startEdit(address)}>
@@ -259,7 +333,14 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
                 onClick={() => {
                   setShowForm(true);
                   setEditingId(null);
-                  setForm({ ...emptyForm, isDefault: addresses.length === 0 });
+                  setFieldErrors({});
+                  setForm({
+                    ...emptyForm,
+                    isDefault: addresses.length === 0,
+                    contactPerson: vendorDefaults.ownerName || '',
+                    phone: vendorDefaults.phone || '',
+                    email: vendorDefaults.email || '',
+                  });
                 }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Pickup Address
@@ -274,25 +355,32 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
                       className="mt-1"
                       placeholder="e.g. Ahmedabad Warehouse"
                       value={form.label}
-                      onChange={e => setForm(prev => ({ ...prev, label: e.target.value }))}
+                      onChange={e => updateFormField('label', e.target.value)}
                     />
                     {fieldErrors.label && <p className="text-xs text-red-600 mt-1">{fieldErrors.label}</p>}
                   </div>
                   <div>
-                    <label className="text-sm font-medium">Contact Person</label>
+                    <label className="text-sm font-medium">Contact Person *</label>
                     <Input
                       className="mt-1"
+                      placeholder="Full name"
                       value={form.contactPerson}
-                      onChange={e => setForm(prev => ({ ...prev, contactPerson: e.target.value }))}
+                      onChange={e => updateFormField('contactPerson', e.target.value)}
                     />
+                    {fieldErrors.contactPerson && (
+                      <p className="text-xs text-red-600 mt-1">{fieldErrors.contactPerson}</p>
+                    )}
                   </div>
                   <div className="md:col-span-2">
                     <label className="text-sm font-medium">Street Address *</label>
+                    <p className="text-xs text-gray-500 mb-1">
+                      Must include house/flat/road number with digits (e.g. House No 12, MG Road)
+                    </p>
                     <Input
                       className="mt-1"
-                      placeholder="Building, street, area"
+                      placeholder="House No 12, Street name, area"
                       value={form.address1}
-                      onChange={e => setForm(prev => ({ ...prev, address1: e.target.value }))}
+                      onChange={e => updateFormField('address1', e.target.value)}
                     />
                     {fieldErrors.address1 && <p className="text-xs text-red-600 mt-1">{fieldErrors.address1}</p>}
                   </div>
@@ -301,15 +389,16 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
                     <Input
                       className="mt-1"
                       value={form.address2}
-                      onChange={e => setForm(prev => ({ ...prev, address2: e.target.value }))}
+                      onChange={e => updateFormField('address2', e.target.value)}
                     />
+                    {fieldErrors.address2 && <p className="text-xs text-red-600 mt-1">{fieldErrors.address2}</p>}
                   </div>
                   <div>
                     <label className="text-sm font-medium">City *</label>
                     <Input
                       className="mt-1"
                       value={form.city}
-                      onChange={e => setForm(prev => ({ ...prev, city: e.target.value }))}
+                      onChange={e => updateFormField('city', e.target.value)}
                     />
                     {fieldErrors.city && <p className="text-xs text-red-600 mt-1">{fieldErrors.city}</p>}
                   </div>
@@ -318,7 +407,7 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
                     <select
                       className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={form.state}
-                      onChange={e => setForm(prev => ({ ...prev, state: e.target.value }))}>
+                      onChange={e => updateFormField('state', e.target.value)}>
                       <option value="">Select state</option>
                       {INDIAN_STATES.map(state => (
                         <option key={state} value={state}>
@@ -334,26 +423,29 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
                       className="mt-1"
                       maxLength={6}
                       value={form.pinCode}
-                      onChange={e => setForm(prev => ({ ...prev, pinCode: e.target.value.replace(/\D/g, '') }))}
+                      onChange={e => updateFormField('pinCode', e.target.value.replace(/\D/g, ''))}
                     />
                     {fieldErrors.pinCode && <p className="text-xs text-red-600 mt-1">{fieldErrors.pinCode}</p>}
                   </div>
                   <div>
-                    <label className="text-sm font-medium">Phone</label>
+                    <label className="text-sm font-medium">Phone *</label>
                     <Input
                       className="mt-1"
                       maxLength={10}
+                      placeholder="10-digit mobile"
                       value={form.phone}
-                      onChange={e => setForm(prev => ({ ...prev, phone: e.target.value.replace(/\D/g, '') }))}
+                      onChange={e => updateFormField('phone', e.target.value.replace(/\D/g, ''))}
                     />
                     {fieldErrors.phone && <p className="text-xs text-red-600 mt-1">{fieldErrors.phone}</p>}
                   </div>
                   <div>
-                    <label className="text-sm font-medium">Email</label>
+                    <label className="text-sm font-medium">Email *</label>
                     <Input
                       className="mt-1"
+                      type="email"
+                      placeholder="name@example.com"
                       value={form.email}
-                      onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
+                      onChange={e => updateFormField('email', e.target.value)}
                     />
                     {fieldErrors.email && <p className="text-xs text-red-600 mt-1">{fieldErrors.email}</p>}
                   </div>

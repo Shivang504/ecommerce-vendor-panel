@@ -127,7 +127,8 @@ interface Product {
   returnPolicyDays: number;
   warrantyPeriod: string;
   vendor: string;
-  warehouseId?: string; // Warehouse ID for product
+  vendorPickupAddressId?: string;
+  warehouseId?: string; // Admin warehouse fallback
   createdAt?: string; // Added for potential API response
   updatedAt?: string; // Added for potential API response
   // New pricing and GST fields
@@ -201,6 +202,7 @@ const INITIAL_PRODUCT: Product = {
   returnPolicyDays: 30,
   warrantyPeriod: '1 year',
   vendor: 'Main Store',
+  vendorPickupAddressId: '',
   warehouseId: '',
   // New pricing and GST fields
   basePrice: 0,
@@ -271,6 +273,9 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   const [fetchingProduct, setFetchingProduct] = useState(!!productId);
   const [vendors, setVendors] = useState<Array<{ _id: string; storeName: string }>>([]);
   const [warehouses, setWarehouses] = useState<Array<{ _id: string; name: string; pincode: string }>>([]);
+  const [pickupAddresses, setPickupAddresses] = useState<
+    Array<{ id: string; label: string; city: string; state: string; pinCode: string; isDefault: boolean }>
+  >([]);
   const [categories, setCategories] = useState<Array<{ _id: string; name: string; displayLabel?: string; type?: string; value?: string }>>(
     []
   );
@@ -352,9 +357,10 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
       // Only fetch vendors if not a vendor (admins need the dropdown)
       if (!isVendorUser) {
     fetchVendors();
-      }
-      
     fetchWarehouses();
+      } else {
+        fetchPickupAddresses();
+      }
     fetchCategories();
     fetchTags();
     fetchBrands();
@@ -532,6 +538,34 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     } catch (error) {
       console.error('[v0] Failed to fetch warehouses:', error);
       setWarehouses([]);
+    }
+  };
+
+  const fetchPickupAddresses = async () => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch('/api/admin/vendor/pickup-addresses', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        setPickupAddresses([]);
+        return;
+      }
+      const data = await response.json();
+      const addresses = Array.isArray(data.addresses) ? data.addresses : [];
+      setPickupAddresses(addresses);
+      setFormData(prev => {
+        if (productId || prev.vendorPickupAddressId) return prev;
+        const primary = addresses.find((addr: { isDefault: boolean }) => addr.isDefault) || addresses[0];
+        return primary ? { ...prev, vendorPickupAddressId: primary.id } : prev;
+      });
+    } catch (error) {
+      console.error('[ProductForm] Failed to fetch pickup addresses:', error);
+      setPickupAddresses([]);
     }
   };
 
@@ -845,6 +879,8 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     lowStockThreshold: 'inventory',
     allowBackorders: 'inventory',
     barcode: 'inventory',
+    vendorPickupAddressId: 'inventory',
+    warehouseId: 'inventory',
     mainImage: 'images',
     galleryImages: 'images',
     sizeChartImage: 'images',
@@ -940,6 +976,13 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     }
     if (formData.allow_return && !formData.return_policy?.trim()) {
       newErrors.return_policy = 'Return policy is required when returns are enabled';
+    }
+    if (
+      isVendor &&
+      formData.product_type === 'Physical Product' &&
+      !formData.vendorPickupAddressId?.trim()
+    ) {
+      newErrors.vendorPickupAddressId = 'Select a pickup address to ship from';
     }
 
     return newErrors;
@@ -2404,19 +2447,46 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                       />
 
                       <Dropdown
-                        options={[
-                          { label: 'Select Warehouse', value: '' },
-                          ...warehouses.map(wh => ({
-                            label: `${wh.name} (${wh.pincode})`,
-                            value: wh._id,
-                          })),
-                        ]}
-                        placeholder='Select warehouse'
-                        labelMain='Warehouse'
-                        value={formData.warehouseId || ''}
-                        onChange={option => handleChange('warehouseId', option.value)}
-                        error={isFieldInActiveTab('warehouseId') ? errors.warehouseId : undefined}
+                        options={
+                          isVendor
+                            ? [
+                                { label: 'Select pickup address', value: '' },
+                                ...pickupAddresses.map(addr => ({
+                                  label: `${addr.label} (${addr.city}, ${addr.pinCode})${
+                                    addr.isDefault ? ' — Primary' : ''
+                                  }`,
+                                  value: addr.id,
+                                })),
+                              ]
+                            : [
+                                { label: 'Select Warehouse', value: '' },
+                                ...warehouses.map(wh => ({
+                                  label: `${wh.name} (${wh.pincode})`,
+                                  value: wh._id,
+                                })),
+                              ]
+                        }
+                        placeholder={isVendor ? 'Select pickup address' : 'Select warehouse'}
+                        labelMain={isVendor ? 'Ship From (Pickup Address)' : 'Warehouse'}
+                        value={isVendor ? formData.vendorPickupAddressId || '' : formData.warehouseId || ''}
+                        onChange={option =>
+                          isVendor
+                            ? handleChange('vendorPickupAddressId', option.value)
+                            : handleChange('warehouseId', option.value)
+                        }
+                        error={
+                          isFieldInActiveTab(isVendor ? 'vendorPickupAddressId' : 'warehouseId')
+                            ? isVendor
+                              ? errors.vendorPickupAddressId
+                              : errors.warehouseId
+                            : undefined
+                        }
                       />
+                      {isVendor && pickupAddresses.length === 0 && (
+                        <p className="text-sm text-orange-600">
+                          Add pickup addresses in your Profile before shipping products.
+                        </p>
+                      )}
                     </div>
                   )}
 

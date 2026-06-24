@@ -50,7 +50,7 @@ export function TopBar() {
   };
 
   const handleProfile = () => router.push('/supplier/profile');
-  const handleSettings = () => router.push('/supplier/settings');
+  const handleSettings = () => router.push('/supplier/profile');
 
   const getInitials = (name: string) =>
     name

@@ -47,6 +47,8 @@ export interface Product {
   warrantyPeriod: string;
   vendor: string;
   vendorId?: string;
+  vendorPickupAddressId?: string;
+  warehouseId?: string;
   createdAt?: Date;
   updatedAt?: Date;
   // New pricing and GST fields
