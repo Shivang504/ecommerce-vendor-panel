@@ -289,28 +289,6 @@ export async function PUT(
       const isReadyForPickup = statusNormalized === 'ready_for_pickup';
       const shiprocketOn = isShiprocketEnabled();
 
-      if (isReadyForPickup && shiprocketOn) {
-        const { db } = await connectToDatabase();
-        const preferredVendorId = isVendor(currentUser) ? currentUser.id : undefined;
-        const previewItems = currentOrder.items.map((item: any) => ({
-          vendorId: normalizeId(item.vendorId),
-        }));
-        const { pickupAddress: previewPickupAddress } = await resolveVendorPickupAddress(
-          db,
-          previewItems,
-          preferredVendorId
-        );
-        if (!previewPickupAddress) {
-          return NextResponse.json(
-            {
-              error:
-                'Vendor pickup address is missing. Add a default pickup address in Profile before Ready for Pickup.',
-            },
-            { status: 400 }
-          );
-        }
-      }
-
       await updateOrderStatus(id, orderStatus, adminNotes);
 
       if (isReadyForPickup && !shiprocketOn) {
@@ -416,9 +394,10 @@ export async function PUT(
             
             console.log('[Ready for Pickup] 🏭 Pickup Source:', {
               vendorId: pickupVendorId || preferredVendorId || 'None',
-              vendorPickupLocation: vendorPickupAddress.pickupLocation,
-              vendorPickupPincode: vendorPickupAddress.pincode,
-              warehouseId: warehouseId || 'Not used (vendor pickup)',
+              source: vendorPickupAddress ? 'vendor_profile' : 'warehouse_or_shiprocket_default',
+              vendorPickupLocation: vendorPickupAddress?.pickupLocation || null,
+              vendorPickupPincode: vendorPickupAddress?.pincode || null,
+              warehouseId: warehouseId || 'default warehouse',
             });
             
             // Check serviceability to get fastest courier
@@ -426,13 +405,13 @@ export async function PUT(
               pincode: currentOrder.shippingAddress.postalCode,
               weight: totalWeight,
               codAmount: currentOrder.payment.paymentMethod === 'cod' ? currentOrder.pricing.total : 0,
-              pickupPincode: vendorPickupAddress?.pincode,
+              pickupPincode: vendorPickupAddress?.pincode || 'warehouse/env fallback',
               warehouseId,
             });
             
             const serviceabilityResult = await checkShiprocketServiceability(
               currentOrder.shippingAddress.postalCode,
-              vendorPickupAddress.pincode,
+              vendorPickupAddress?.pincode,
               totalWeight,
               currentOrder.payment.paymentMethod === 'cod' ? currentOrder.pricing.total : 0,
               warehouseId

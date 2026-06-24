@@ -1,5 +1,6 @@
 import { ObjectId } from 'mongodb';
 import type { ShiprocketPickupAddressInput } from '@/lib/shiprocket';
+import { getVendorById } from '@/lib/models/vendor';
 
 export interface VendorPickupAddress {
   id: string;
@@ -152,15 +153,35 @@ export async function resolveVendorPickupAddress(
 
   for (const vendorId of vendorIds) {
     try {
-      const vendorQuery = ObjectId.isValid(vendorId) ? { _id: new ObjectId(vendorId) } : { _id: vendorId };
-      const vendor = await db.collection('vendors').findOne(vendorQuery);
+      if (!ObjectId.isValid(vendorId)) {
+        console.warn('[Vendor Pickup] Invalid vendor id:', vendorId);
+        continue;
+      }
+
+      const vendor = await getVendorById(vendorId);
+      if (!vendor) {
+        console.warn('[Vendor Pickup] Vendor not found:', vendorId);
+        continue;
+      }
+
       const defaultAddress = getDefaultPickupAddress(vendor);
-      if (!defaultAddress) continue;
+      if (!defaultAddress) {
+        console.warn('[Vendor Pickup] No pickup address on vendor profile:', vendorId);
+        continue;
+      }
 
       const pickupAddress = toShiprocketPickupInput(vendor, defaultAddress);
       if (pickupAddress) {
         return { vendorId, pickupAddress };
       }
+
+      console.warn('[Vendor Pickup] Pickup address incomplete for Shiprocket:', {
+        vendorId,
+        label: defaultAddress.label,
+        pinCode: defaultAddress.pinCode,
+        hasPhone: !!(defaultAddress.phone || vendor.phone),
+        hasEmail: !!(defaultAddress.email || vendor.email),
+      });
     } catch (error) {
       console.warn('[Vendor Pickup] Could not resolve pickup address:', {
         vendorId,
