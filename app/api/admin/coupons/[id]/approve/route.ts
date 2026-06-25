@@ -41,12 +41,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const approvalStatus = action === 'approve' ? 'approved' : 'rejected';
     const updateData: Record<string, unknown> = {
       approvalStatus,
+      status: action === 'approve',
       updatedAt: new Date(),
     };
-
-    if (action === 'reject') {
-      updateData.status = false;
-    }
 
     await db.collection('coupons').updateOne({ _id: new ObjectId(id) }, { $set: updateData });
 
