@@ -1062,7 +1062,22 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         body: JSON.stringify(cleanData),
       });
 
-      const responseData = await response.json();
+      const responseText = await response.text();
+      let responseData: { _id?: string; error?: string; details?: string } = {};
+      try {
+        responseData = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        const isTooLarge =
+          response.status === 413 || /request entity too large/i.test(responseText);
+        toast({
+          title: 'Error',
+          description: isTooLarge
+            ? 'Product images are too large. Remove some gallery images or re-upload them (they will be compressed automatically).'
+            : 'Server error while saving. Please try again.',
+          variant: 'destructive',
+        });
+        return null;
+      }
 
       if (response.ok) {
         return responseData._id || savedProductId || null;
@@ -1636,6 +1651,32 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   }, [colorAttributeOption, formData.attributes]);
 
   const [uploadingColorImage, setUploadingColorImage] = useState<string | null>(null);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+
+  const parseUploadResponse = async (response: Response) => {
+    const responseText = await response.text();
+    try {
+      return JSON.parse(responseText) as { url?: string; error?: string; details?: string };
+    } catch {
+      if (response.status === 413 || /request entity too large/i.test(responseText)) {
+        throw new Error('File is too large. Please use a smaller image.');
+      }
+      throw new Error('Upload failed. Please try again.');
+    }
+  };
+
+  const uploadProductAsset = async (file: File): Promise<string> => {
+    const { compressImageFile } = await import('@/lib/compress-image');
+    const compressed = await compressImageFile(file);
+    const body = new FormData();
+    body.append('file', compressed);
+    const response = await fetch('/api/upload', { method: 'POST', body });
+    const data = await parseUploadResponse(response);
+    if (!response.ok || !data.url) {
+      throw new Error(data.details || data.error || 'Upload failed');
+    }
+    return data.url;
+  };
 
   const getVariantImageForColor = (color: string): string | undefined => {
     if (!colorAttributeOption?.name) return undefined;
@@ -1658,14 +1699,8 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   const uploadColorVariantImage = async (color: string, file: File) => {
     setUploadingColorImage(color);
     try {
-      const body = new FormData();
-      body.append('file', file);
-      const response = await fetch('/api/upload', { method: 'POST', body });
-      const data = await response.json();
-      if (!response.ok || !data.url) {
-        throw new Error(data.error || 'Upload failed');
-      }
-      setImageForAllVariantsOfColor(color, data.url);
+      const url = await uploadProductAsset(file);
+      setImageForAllVariantsOfColor(color, url);
       toast({ title: 'Image saved', description: `Image set for color "${color}"` });
     } catch (error) {
       toast({
@@ -2790,6 +2825,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                           required
                           value={formData.mainImage}
                           onChange={val => handleChange('mainImage', val)}
+                          uploadHandler={uploadProductAsset}
                           error={isFieldInActiveTab('mainImage') ? errors.mainImage : undefined}
                         />
 
@@ -2804,63 +2840,91 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                             type='file'
                             accept='image/*,video/*'
                             multiple
-                            onChange={e => {
-                              if (e.target.files) {
-                                const files = Array.from(e.target.files);
-                                const validFiles: File[] = [];
-                                const errors: string[] = [];
+                            disabled={uploadingGallery}
+                            onChange={async e => {
+                              if (!e.target.files) return;
 
-                                // Validate each file
-                                files.forEach(file => {
-                                  const isVideo = file.type.startsWith('video/');
-                                  const isImage = file.type.startsWith('image/');
+                              const files = Array.from(e.target.files);
+                              const validFiles: File[] = [];
+                              const validationErrors: string[] = [];
 
-                                  if (!isImage && !isVideo) {
-                                    errors.push(`${file.name} is not a valid image or video file`);
-                                    return;
-                                  }
+                              files.forEach(file => {
+                                const isVideo = file.type.startsWith('video/');
+                                const isImage = file.type.startsWith('image/');
 
-                                  // Check file size for videos (10MB limit)
-                                  if (isVideo && file.size > 10 * 1024 * 1024) {
-                                    errors.push(`${file.name} is too large. Videos must be 10MB or less.`);
-                                    return;
-                                  }
+                                if (!isImage && !isVideo) {
+                                  validationErrors.push(`${file.name} is not a valid image or video file`);
+                                  return;
+                                }
 
-                                  validFiles.push(file);
+                                if (isVideo && file.size > 10 * 1024 * 1024) {
+                                  validationErrors.push(`${file.name} is too large. Videos must be 10MB or less.`);
+                                  return;
+                                }
+
+                                if (isImage && file.size > 10 * 1024 * 1024) {
+                                  validationErrors.push(`${file.name} is too large. Images must be 10MB or less.`);
+                                  return;
+                                }
+
+                                validFiles.push(file);
+                              });
+
+                              validationErrors.forEach(error => {
+                                toast({
+                                  title: 'Upload Error',
+                                  description: error,
+                                  variant: 'destructive',
                                 });
+                              });
 
-                                // Show errors if any
-                                if (errors.length > 0) {
-                                  errors.forEach(error => {
-                                    toast({
-                                      title: 'Upload Error',
-                                      description: error,
-                                      variant: 'destructive',
+                              if (validFiles.length === 0) {
+                                e.target.value = '';
+                                return;
+                              }
+
+                              setUploadingGallery(true);
+                              const uploadedMedia: string[] = [];
+
+                              try {
+                                for (const file of validFiles) {
+                                  if (file.type.startsWith('video/')) {
+                                    const dataUrl = await new Promise<string>((resolve, reject) => {
+                                      const reader = new FileReader();
+                                      reader.onload = event => resolve(event.target?.result as string);
+                                      reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+                                      reader.readAsDataURL(file);
                                     });
-                                  });
+                                    uploadedMedia.push(dataUrl);
+                                  } else {
+                                    uploadedMedia.push(await uploadProductAsset(file));
+                                  }
                                 }
 
-                                // Process valid files
-                                if (validFiles.length > 0) {
-                                  const newMedia: string[] = [];
-                                  let processedCount = 0;
-
-                                  validFiles.forEach(file => {
-                                    const reader = new FileReader();
-                                    reader.onload = event => {
-                                      newMedia.push(event.target?.result as string);
-                                      processedCount++;
-                                      if (processedCount === validFiles.length) {
-                                        handleChange('galleryImages', [...formData.galleryImages, ...newMedia]);
-                                      }
-                                    };
-                                    reader.readAsDataURL(file);
-                                  });
-                                }
+                                handleChange('galleryImages', [...formData.galleryImages, ...uploadedMedia]);
+                                toast({
+                                  title: 'Uploaded',
+                                  description: `${uploadedMedia.length} file(s) added to gallery`,
+                                });
+                              } catch (error) {
+                                toast({
+                                  title: 'Upload failed',
+                                  description: error instanceof Error ? error.message : 'Could not upload files',
+                                  variant: 'destructive',
+                                });
+                              } finally {
+                                setUploadingGallery(false);
+                                e.target.value = '';
                               }
                             }}
                             className='bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600'
                           />
+                          {uploadingGallery && (
+                            <p className='text-xs text-slate-500 flex items-center gap-2'>
+                              <Loader2 className='w-3 h-3 animate-spin' />
+                              Uploading images...
+                            </p>
+                          )}
                           <div className='grid grid-cols-3 gap-2 mt-4'>
                             {(formData.galleryImages || []).map((media, idx) => {
                               const isVideo = typeof media === 'string' && (media.startsWith('data:video/') || media.includes('video'));
@@ -2903,14 +2967,20 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                           <Input
                             type='file'
                             accept='image/*'
-                            onChange={e => {
-                              if (e.target.files?.[0]) {
-                                const file = e.target.files[0];
-                                const reader = new FileReader();
-                                reader.onload = event => {
-                                  handleChange('sizeChartImage', event.target?.result as string);
-                                };
-                                reader.readAsDataURL(file);
+                            onChange={async e => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                const url = await uploadProductAsset(file);
+                                handleChange('sizeChartImage', url);
+                              } catch (error) {
+                                toast({
+                                  title: 'Upload failed',
+                                  description: error instanceof Error ? error.message : 'Could not upload size chart',
+                                  variant: 'destructive',
+                                });
+                              } finally {
+                                e.target.value = '';
                               }
                             }}
                             className='bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600'
