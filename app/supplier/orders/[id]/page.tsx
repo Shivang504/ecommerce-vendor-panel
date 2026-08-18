@@ -84,6 +84,13 @@ interface Order {
   };
   createdAt: string;
   updatedAt: string;
+  referral?: {
+    code?: string;
+    influencerId?: string;
+    influencerName?: string;
+    commissionStatus?: string;
+    commissionAmount?: number;
+  };
 }
 
 // Forward-only order status flow
@@ -1218,6 +1225,13 @@ export default function OrderDetailPage() {
                 <p className='font-semibold'>{order.customerName}</p>
                 <p>{order.customerEmail}</p>
                 <p>{order.customerPhone}</p>
+                {order.referral?.influencerName && (
+                  <div className='mt-3 rounded-md border border-purple-200 bg-purple-50 p-3'>
+                    <p className='font-semibold text-purple-900'>Influencer referral</p>
+                    <p className='text-purple-800'>{order.referral.influencerName}</p>
+                    {order.referral.code && <p className='text-xs text-purple-700'>Code: {order.referral.code}</p>}
+                  </div>
+                )}
               </div>
             </Card>
 

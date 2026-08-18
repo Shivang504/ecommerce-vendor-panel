@@ -35,9 +35,16 @@ interface Order {
     courierName?: string;
     trackingNumber?: string;
   };
+  referral?: {
+    code?: string;
+    influencerId?: string;
+    influencerName?: string;
+    commissionStatus?: string;
+    commissionAmount?: number;
+  };
 }
 
-export function OrderList() {
+export function OrderList({ referralOnly = false }: { referralOnly?: boolean }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -51,7 +58,7 @@ export function OrderList() {
   useEffect(() => {
     fetchOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, search, statusFilter]);
+  }, [page, limit, search, statusFilter, referralOnly]);
 
   const fetchOrders = async () => {
     try {
@@ -62,6 +69,7 @@ export function OrderList() {
       });
       if (search) params.append('search', search);
       if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (referralOnly) params.append('referral', '1');
 
       const res = await fetch(`/api/admin/orders?${params.toString()}`);
       if (res.ok) {
@@ -228,6 +236,9 @@ export function OrderList() {
                         <div className='font-medium'>{order.customerName || '-'}</div>
                         {order.customerEmail && (
                           <div className='text-xs text-gray-500'>{order.customerEmail}</div>
+                        )}
+                        {order.referral?.influencerName && (
+                          <div className='text-xs text-purple-700 mt-1'>Referred by {order.referral.influencerName}</div>
                         )}
                       </div>
                     </TableCell>

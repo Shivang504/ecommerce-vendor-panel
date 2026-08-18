@@ -34,6 +34,10 @@ export async function GET(request: NextRequest) {
         filter.orderStatus = status;
       }
     }
+
+    if (searchParams.get('referral') === '1') {
+      filter['referral.influencerId'] = { $exists: true, $nin: [null, ''] };
+    }
     
     // If vendor, only show orders containing their products
     if (currentUser && isVendor(currentUser)) {

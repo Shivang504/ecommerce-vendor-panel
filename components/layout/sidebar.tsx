@@ -39,6 +39,7 @@ import {
   BarChart3,
   ClipboardList,
   User,
+  Megaphone,
 } from 'lucide-react';
 
 
@@ -153,6 +154,7 @@ export function Sidebar() {
       allowedRoles: ['superadmin', 'admin', 'vendor'],
     },
     { label: 'Orders', href: '/supplier/orders', badge: null, icon: ShoppingCart, allowedRoles: ['superadmin', 'admin', 'vendor'] },
+    { label: 'Referral Orders', href: '/supplier/referral-orders', badge: null, icon: Megaphone, allowedRoles: ['vendor'] },
     { label: 'Wallet', href: '/supplier/wallet', badge: null, icon: Wallet, allowedRoles: ['vendor'] },
     {
       label: 'Vendor Reports & Analytics',
