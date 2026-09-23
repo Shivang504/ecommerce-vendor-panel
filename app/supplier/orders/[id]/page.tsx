@@ -1085,6 +1085,36 @@ export default function OrderDetailPage() {
                   <span>Shipping</span>
                   <span>₹{order.pricing.shipping.toFixed(2)}</span>
                 </div>
+                {order.pricing?.walletDiscount > 0 && (
+                  <div className='flex justify-between text-green-600'>
+                    <span>Wallet gift card</span>
+                    <span>-₹{Number(order.pricing.walletDiscount).toFixed(2)}</span>
+                  </div>
+                )}
+                {(order.pricing?.loyaltyDiscount > 0 || order.loyalty?.pointsRedeemed > 0) && (
+                  <div className='flex justify-between text-green-600'>
+                    <span>
+                      Loyalty points
+                      {order.loyalty?.pointsRedeemed
+                        ? ` (${order.loyalty.pointsRedeemed} pts)`
+                        : order.pricing?.loyaltyPointsUsed
+                          ? ` (${order.pricing.loyaltyPointsUsed} pts)`
+                          : ''}
+                    </span>
+                    <span>
+                      -₹
+                      {Number(
+                        order.pricing?.loyaltyDiscount || order.loyalty?.discount || 0
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                {order.loyalty?.purchasePoints > 0 && (
+                  <div className='flex justify-between text-purple-700 text-sm'>
+                    <span>Points earned (buyer)</span>
+                    <span>+{order.loyalty.purchasePoints}</span>
+                  </div>
+                )}
                 <div className='border-t pt-3 flex justify-between font-bold text-lg'>
                   <span>Total</span>
                   <span>₹{order.pricing.total.toFixed(2)}</span>

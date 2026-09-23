@@ -480,6 +480,12 @@ export async function updateOrderStatus(
           } catch (error) {
             console.error('[Order] Error processing influencer commission:', error);
           }
+          try {
+            const { processLoyaltyPurchaseFromOrder } = await import('@/lib/models/loyalty');
+            await processLoyaltyPurchaseFromOrder(orderId);
+          } catch (error) {
+            console.error('[Order] Error processing loyalty purchase points:', error);
+          }
         });
         break;
       case 'completed':
@@ -498,6 +504,12 @@ export async function updateOrderStatus(
           } catch (error) {
             console.error('[Order] Error processing influencer commission:', error);
           }
+          try {
+            const { processLoyaltyPurchaseFromOrder } = await import('@/lib/models/loyalty');
+            await processLoyaltyPurchaseFromOrder(orderId);
+          } catch (error) {
+            console.error('[Order] Error processing loyalty purchase points:', error);
+          }
         });
         break;
       case 'cancelled':
@@ -508,6 +520,12 @@ export async function updateOrderStatus(
             await reverseInfluencerCommissionFromOrder(orderId);
           } catch (error) {
             console.error('[Order] Error reversing influencer commission:', error);
+          }
+          try {
+            const { reverseLoyaltyPurchaseFromOrder } = await import('@/lib/models/loyalty');
+            await reverseLoyaltyPurchaseFromOrder(orderId);
+          } catch (error) {
+            console.error('[Order] Error reversing loyalty points:', error);
           }
         });
         break;
@@ -520,6 +538,12 @@ export async function updateOrderStatus(
           } catch (error) {
             console.error('[Order] Error reversing influencer commission:', error);
           }
+          try {
+            const { reverseLoyaltyPurchaseFromOrder } = await import('@/lib/models/loyalty');
+            await reverseLoyaltyPurchaseFromOrder(orderId);
+          } catch (error) {
+            console.error('[Order] Error reversing loyalty points:', error);
+          }
         });
         break;
       case 'refunded':
@@ -530,6 +554,12 @@ export async function updateOrderStatus(
             await reverseInfluencerCommissionFromOrder(orderId);
           } catch (error) {
             console.error('[Order] Error reversing influencer commission:', error);
+          }
+          try {
+            const { reverseLoyaltyPurchaseFromOrder } = await import('@/lib/models/loyalty');
+            await reverseLoyaltyPurchaseFromOrder(orderId);
+          } catch (error) {
+            console.error('[Order] Error reversing loyalty points:', error);
           }
         });
         break;
