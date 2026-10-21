@@ -1,5 +1,23 @@
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { recordStockChange } from '@/lib/inventory-events';
+
+type StockMeta = { reason?: string; orderId?: string };
+
+async function trackStockChange(input: {
+  productId: string;
+  previousStock: number;
+  newStock: number;
+  variant?: Record<string, string>;
+  reason: string;
+  orderId?: string;
+}) {
+  try {
+    await recordStockChange(input);
+  } catch (error) {
+    console.error('[Inventory] Stock event failed:', error);
+  }
+}
 
 /**
  * Decrement product stock (variant-wise or product-wise)
@@ -11,7 +29,8 @@ import { ObjectId } from 'mongodb';
 export async function decrementStock(
   productId: string,
   quantity: number,
-  variant?: Record<string, string>
+  variant?: Record<string, string>,
+  meta?: StockMeta
 ): Promise<{ success: boolean; updatedStock?: number; error?: string }> {
   try {
     const { db } = await connectToDatabase();
@@ -68,6 +87,14 @@ export async function decrementStock(
           }
         );
 
+        await trackStockChange({
+          productId,
+          previousStock: currentVariantStock,
+          newStock: newVariantStock,
+          variant,
+          reason: meta?.reason || 'sale',
+          orderId: meta?.orderId,
+        });
         return { success: true, updatedStock: newVariantStock };
       } else {
         // Variant not found, use product stock
@@ -95,6 +122,13 @@ export async function decrementStock(
       }
     );
 
+    await trackStockChange({
+      productId,
+      previousStock: currentStock,
+      newStock,
+      reason: meta?.reason || 'sale',
+      orderId: meta?.orderId,
+    });
     return { success: true, updatedStock: newStock };
   } catch (error: any) {
     console.error('[Inventory] Error decrementing stock:', error);
@@ -112,7 +146,8 @@ export async function decrementStock(
 export async function incrementStock(
   productId: string,
   quantity: number,
-  variant?: Record<string, string>
+  variant?: Record<string, string>,
+  meta?: StockMeta
 ): Promise<{ success: boolean; updatedStock?: number; error?: string }> {
   try {
     const { db } = await connectToDatabase();
@@ -161,6 +196,14 @@ export async function incrementStock(
           }
         );
 
+        await trackStockChange({
+          productId,
+          previousStock: currentVariantStock,
+          newStock: newVariantStock,
+          variant,
+          reason: meta?.reason || 'restock',
+          orderId: meta?.orderId,
+        });
         return { success: true, updatedStock: newVariantStock };
       } else {
         // Variant not found, use product stock
@@ -180,6 +223,13 @@ export async function incrementStock(
       }
     );
 
+    await trackStockChange({
+      productId,
+      previousStock: currentStock,
+      newStock,
+      reason: meta?.reason || 'restock',
+      orderId: meta?.orderId,
+    });
     return { success: true, updatedStock: newStock };
   } catch (error: any) {
     console.error('[Inventory] Error incrementing stock:', error);

@@ -40,6 +40,7 @@ import {
   ClipboardList,
   User,
   Megaphone,
+  Boxes,
 } from 'lucide-react';
 
 
@@ -154,6 +155,7 @@ export function Sidebar() {
       allowedRoles: ['superadmin', 'admin', 'vendor'],
     },
     { label: 'Orders', href: '/supplier/orders', badge: null, icon: ShoppingCart, allowedRoles: ['superadmin', 'admin', 'vendor'] },
+    { label: 'Inventory', href: '/supplier/inventory', badge: null, icon: Boxes, allowedRoles: ['vendor', 'superadmin', 'admin'] },
     { label: 'Referral Orders', href: '/supplier/referral-orders', badge: null, icon: Megaphone, allowedRoles: ['vendor'] },
     { label: 'Wallet', href: '/supplier/wallet', badge: null, icon: Wallet, allowedRoles: ['vendor'] },
     {
@@ -197,7 +199,14 @@ export function Sidebar() {
     },
     { label: 'Withdrawals', href: '/supplier/withdrawals', badge: null, icon: Wallet, allowedRoles: ['superadmin', 'admin'] },
     {
-      label: 'Reports & Analytics',
+      label: 'Reports',
+      href: '/supplier/reports',
+      badge: null,
+      icon: BarChart3,
+      allowedRoles: ['vendor', 'superadmin', 'admin'],
+    },
+    {
+      label: 'SEO',
       href: '/supplier/seo',
       badge: null,
       icon: Search,

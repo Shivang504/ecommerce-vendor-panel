@@ -176,6 +176,13 @@ export async function PUT(
     }
 
     const updatedProduct = await db.collection('products').findOne({ _id: new ObjectId(id) });
+
+    try {
+      const { recordManualStockEdits } = await import('@/lib/inventory-events');
+      await recordManualStockEdits(id, existingProduct, updatedProduct);
+    } catch (stockError) {
+      console.error('[Inventory] Manual stock edit hook failed:', stockError);
+    }
     
     console.log('[v0] Successfully updated product');
 

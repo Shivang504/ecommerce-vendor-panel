@@ -20,6 +20,7 @@ export interface Product {
   taxRate: number;
   stock: number;
   lowStockThreshold: number;
+  reorderLevel?: number;
   allowBackorders: boolean;
   barcode: string;
   weight: number;
