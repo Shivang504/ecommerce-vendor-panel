@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/layout/admin-layout';
 import { Button } from '@/components/ui/button';
-import { downloadExcelCsv, downloadPdf } from '@/lib/report-export';
+import { downloadExcel, downloadPdf, type ReportRow, type ReportSheet } from '@/lib/report-export';
 
 type Tab = 'sales' | 'revenue' | 'traffic' | 'vendors';
 
@@ -17,6 +17,13 @@ type Report = {
   traffic: { hidden: boolean; days: Array<{ date: string; visits: number }>; topPaths: Array<{ path: string; visits: number }> };
 };
 
+const TAB_LABEL: Record<Tab, string> = {
+  sales: 'Sales',
+  revenue: 'Revenue',
+  traffic: 'Traffic',
+  vendors: 'Vendor performance',
+};
+
 function dateKey(offset: number) {
   const date = new Date();
   date.setDate(date.getDate() + offset);
@@ -24,7 +31,7 @@ function dateKey(offset: number) {
 }
 
 function inr(value: number) {
-  return `INR ${value.toLocaleString('en-IN')}`;
+  return `INR ${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function ReportsPage() {
@@ -58,41 +65,34 @@ export default function ReportsPage() {
     load();
   }, []);
 
-  const rows = useMemo(() => {
-    if (!report) return [];
-    if (tab === 'sales') {
-      return report.sales.map(row => ({
-        Date: row.date,
-        Orders: row.orders,
-        Units: row.units,
-        Delivered: row.delivered,
-        Cancelled: row.cancelled,
-        Revenue: row.revenue,
-      }));
-    }
-    if (tab === 'revenue') {
-      const paymentRows = report.payments.map(row => ({
-        Method: row.method,
-        Orders: row.orders,
-        Revenue: row.revenue,
-      }));
-      return paymentRows.length ? paymentRows : report.sales.map(row => ({ Date: row.date, Revenue: row.revenue, Orders: row.orders }));
-    }
-    if (tab === 'traffic') {
-      if (report.traffic.hidden) return [{ Note: 'Store traffic is visible to admin only' }];
-      const days = report.traffic.days.map(row => ({ Date: row.date, Visits: row.visits, Path: '' }));
-      const paths = report.traffic.topPaths.map(row => ({ Date: '', Visits: row.visits, Path: row.path }));
-      return [...days, ...paths];
-    }
-    return report.vendors.map(row => ({
-      Vendor: row.vendor,
-      Orders: row.orders,
-      Units: row.units,
-      Revenue: row.revenue,
-    }));
-  }, [report, tab]);
-
+  const sheets = useMemo(() => buildSheets(tab, report), [tab, report]);
+  const summaryRow: ReportRow[] = report
+    ? [
+        {
+          Orders: report.summary.orders,
+          Units: report.summary.units,
+          Delivered: report.summary.delivered,
+          Cancelled: report.summary.cancelled,
+          Revenue: inr(report.summary.revenue),
+          Visits: report.traffic.hidden ? 'Admin only' : report.summary.visits,
+        },
+      ]
+    : [];
+  const canExport = sheets.some(sheet => sheet.rows.length > 0);
   const exportName = `tryvvo-${tab}-${from}-to-${to}`;
+
+  const exportFile = (kind: 'excel' | 'pdf') => {
+    if (kind === 'excel') {
+      downloadExcel(exportName, sheets);
+      return;
+    }
+    downloadPdf(exportName, {
+      title: `${TAB_LABEL[tab]} report`,
+      range: `${from} to ${to}`,
+      summary: summaryRow,
+      sheets,
+    });
+  };
 
   return (
     <AdminLayout>
@@ -112,40 +112,26 @@ export default function ReportsPage() {
               <input className='mt-1 block rounded-md border px-2 py-1 text-sm' type='date' value={to} onChange={e => setTo(e.target.value)} />
             </label>
             <Button onClick={() => load()}>Apply</Button>
-            <Button variant='outline' disabled={!rows.length} onClick={() => downloadExcelCsv(exportName, rows)}>
+            <Button variant='outline' disabled={!canExport} onClick={() => exportFile('excel')}>
               Export Excel
             </Button>
-            <Button variant='outline' disabled={!rows.length} onClick={() => downloadPdf(exportName, `Tryvvo ${tab} report ${from} to ${to}`, rows)}>
+            <Button variant='outline' disabled={!canExport} onClick={() => exportFile('pdf')}>
               Export PDF
             </Button>
           </div>
         </div>
 
         <div className='flex flex-wrap gap-2'>
-          {(
-            [
-              ['sales', 'Sales'],
-              ['revenue', 'Revenue'],
-              ['traffic', 'Traffic'],
-              ['vendors', 'Vendor performance'],
-            ] as Array<[Tab, string]>
-          ).map(([id, label]) => (
+          {(Object.keys(TAB_LABEL) as Tab[]).map(id => (
             <Button key={id} variant={tab === id ? 'default' : 'outline'} onClick={() => setTab(id)}>
-              {label}
+              {TAB_LABEL[id]}
             </Button>
           ))}
         </div>
 
         {report && (
           <div className='grid gap-3 sm:grid-cols-3 lg:grid-cols-6'>
-            {[
-              ['Orders', report.summary.orders],
-              ['Units', report.summary.units],
-              ['Delivered', report.summary.delivered],
-              ['Cancelled', report.summary.cancelled],
-              ['Revenue', inr(report.summary.revenue)],
-              ['Visits', report.traffic.hidden ? '—' : report.summary.visits],
-            ].map(([label, value]) => (
+            {Object.entries(summaryRow[0] || {}).map(([label, value]) => (
               <div key={label} className='rounded-xl border border-slate-200 bg-white p-3'>
                 <p className='text-xs text-slate-500'>{label}</p>
                 <p className='mt-1 text-lg font-semibold text-slate-900'>{value}</p>
@@ -155,18 +141,81 @@ export default function ReportsPage() {
         )}
 
         {error && <p className='text-sm text-red-600'>{error}</p>}
-        {loading ? <p className='text-sm text-slate-500'>Loading reports...</p> : <ReportTable rows={rows} />}
+        {loading ? (
+          <p className='text-sm text-slate-500'>Loading reports...</p>
+        ) : (
+          <div className='space-y-6'>
+            {sheets.map(sheet => (
+              <section key={sheet.name}>
+                <h2 className='mb-2 text-sm font-semibold text-slate-700'>{sheet.name}</h2>
+                <ReportTable rows={sheet.rows} />
+              </section>
+            ))}
+          </div>
+        )}
       </div>
     </AdminLayout>
   );
 }
 
-function ReportTable({ rows }: { rows: Array<Record<string, string | number>> }) {
+function buildSheets(tab: Tab, report: Report | null): ReportSheet[] {
+  if (!report) return [];
+  if (tab === 'sales') {
+    return [
+      {
+        name: 'Sales',
+        rows: report.sales.map(row => ({
+          Date: row.date,
+          Orders: row.orders,
+          Units: row.units,
+          Delivered: row.delivered,
+          Cancelled: row.cancelled,
+          Revenue: inr(row.revenue),
+        })),
+      },
+    ];
+  }
+  if (tab === 'revenue') {
+    const paymentRows = report.payments.map(row => ({
+      Method: row.method,
+      Orders: row.orders,
+      Revenue: inr(row.revenue),
+    }));
+    return [
+      {
+        name: 'Revenue',
+        rows: paymentRows.length
+          ? paymentRows
+          : report.sales.map(row => ({ Date: row.date, Orders: row.orders, Revenue: inr(row.revenue) })),
+      },
+    ];
+  }
+  if (tab === 'traffic') {
+    if (report.traffic.hidden) return [{ name: 'Traffic', rows: [{ Note: 'Store traffic is visible to admin only' }] }];
+    return [
+      { name: 'Visits by day', rows: report.traffic.days.map(row => ({ Date: row.date, Visits: row.visits })) },
+      { name: 'Top pages', rows: report.traffic.topPaths.map(row => ({ Page: row.path, Visits: row.visits })) },
+    ];
+  }
+  return [
+    {
+      name: 'Vendor performance',
+      rows: report.vendors.map(row => ({
+        Vendor: row.vendor,
+        Orders: row.orders,
+        Units: row.units,
+        Revenue: inr(row.revenue),
+      })),
+    },
+  ];
+}
+
+function ReportTable({ rows }: { rows: ReportRow[] }) {
   const headers = Object.keys(rows[0] || {});
   return (
     <div className='overflow-x-auto rounded-xl border border-slate-200 bg-white'>
       <table className='min-w-full text-sm'>
-        <thead className='bg-slate-50 text-left text-slate-500'>
+        <thead className='bg-[#E8F7F1] text-left text-[#0B8A6A]'>
           <tr>
             {headers.map(header => (
               <th key={header} className='px-4 py-3 font-medium'>

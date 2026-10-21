@@ -1,82 +1,82 @@
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
-export function downloadExcelCsv(filename: string, rows: Array<Record<string, string | number>>) {
-  const sheet = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Note: 'No rows' }]);
+export type ReportRow = Record<string, string | number>;
+
+export type ReportSheet = {
+  name: string;
+  rows: ReportRow[];
+};
+
+const GREEN: [number, number, number] = [11, 138, 106];
+
+export function downloadExcel(filename: string, sheets: ReportSheet[]) {
   const book = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(book, sheet, 'Report');
+  const usable = sheets.filter(sheet => sheet.rows.length > 0);
+  const source = usable.length ? usable : [{ name: 'Report', rows: [{ Note: 'No rows' }] }];
+  for (const sheet of source) {
+    const table = XLSX.utils.json_to_sheet(sheet.rows);
+    XLSX.utils.book_append_sheet(book, table, sheet.name.slice(0, 31));
+  }
   const name = filename.replace(/\.csv$/i, '');
   XLSX.writeFile(book, name.endsWith('.xlsx') ? name : `${name}.xlsx`);
 }
 
-function pdfEscape(value: string) {
-  return value.replace(/[^\x20-\x7E]/g, ' ').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-}
+export function downloadPdf(filename: string, options: { title: string; range: string; summary: ReportRow[]; sheets: ReportSheet[] }) {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
 
-function buildPdf(lines: string[]) {
-  const wrapped: string[] = [];
-  for (const line of lines) {
-    const text = pdfEscape(line);
-    if (!text) {
-      wrapped.push('');
-      continue;
-    }
-    for (let index = 0; index < text.length; index += 95) wrapped.push(text.slice(index, index + 95));
-  }
-  const chunks: string[][] = [];
-  for (let index = 0; index < Math.max(wrapped.length, 1); index += 42) {
-    chunks.push(wrapped.slice(index, index + 42));
-  }
+  doc.setFillColor(...GREEN);
+  doc.rect(0, 0, pageWidth, 72, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('Tryvvo', 40, 32);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text(options.title, 40, 52);
 
-  const objects: string[] = [];
-  const pageIds: number[] = [];
-  let nextId = 4;
-  const contentIds: number[] = [];
-  for (const chunk of chunks) {
-    const contentId = nextId++;
-    const pageId = nextId++;
-    contentIds.push(contentId);
-    pageIds.push(pageId);
-    const commands = ['BT', '/F1 10 Tf', '40 800 Td', '14 TL'];
-    chunk.forEach((line, index) => {
-      commands.push(index === 0 ? `(${line}) Tj` : `T* (${line}) Tj`);
+  doc.setTextColor(30, 41, 59);
+  doc.setFontSize(10);
+  doc.text(options.range, 40, 96);
+
+  let cursor = 112;
+  if (options.summary.length) {
+    autoTable(doc, {
+      startY: cursor,
+      head: [Object.keys(options.summary[0])],
+      body: options.summary.map(row => Object.values(row).map(value => String(value))),
+      theme: 'plain',
+      styles: { fontSize: 10, cellPadding: 6 },
+      headStyles: { fillColor: [232, 247, 241], textColor: GREEN, fontStyle: 'bold' },
+      margin: { left: 40, right: 40 },
     });
-    commands.push('ET');
-    const stream = commands.join('\n');
-    objects[contentId - 1] = `${contentId} 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`;
-    objects[pageId - 1] = `${pageId} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents ${contentId} 0 R /Resources << /Font << /F1 3 0 R >> >> >>\nendobj\n`;
+    cursor = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || cursor + 40;
+    cursor += 18;
   }
 
-  objects[0] = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
-  objects[1] = `2 0 obj\n<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] >>\nendobj\n`;
-  objects[2] = `3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n`;
+  for (const sheet of options.sheets) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(...GREEN);
+    doc.text(sheet.name, 40, cursor);
+    cursor += 8;
+    const headers = Object.keys(sheet.rows[0] || { Note: 'No rows' });
+    const body = sheet.rows.length
+      ? sheet.rows.map(row => headers.map(header => String(row[header] ?? '')))
+      : [['No rows in this date range']];
+    autoTable(doc, {
+      startY: cursor,
+      head: [headers],
+      body,
+      styles: { fontSize: 9, cellPadding: 5, textColor: [30, 41, 59] },
+      headStyles: { fillColor: GREEN, textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [243, 250, 246] },
+      margin: { left: 40, right: 40 },
+    });
+    cursor = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || cursor) + 28;
+  }
 
-  let pdf = '%PDF-1.4\n';
-  const offsets = [0];
-  for (let index = 0; index < objects.length; index++) {
-    offsets.push(pdf.length);
-    pdf += objects[index];
-  }
-  const xref = pdf.length;
-  pdf += `xref\n0 ${objects.length + 1}\n`;
-  pdf += '0000000000 65535 f \n';
-  for (let index = 1; index < offsets.length; index++) {
-    pdf += `${String(offsets[index]).padStart(10, '0')} 00000 n \n`;
-  }
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-  return new TextEncoder().encode(pdf);
-}
-
-export function downloadPdf(filename: string, title: string, rows: Array<Record<string, string | number>>) {
-  const headers = Object.keys(rows[0] || { Note: 'No rows' });
-  const lines = [title, '', headers.join(' | ')];
-  for (const row of rows) {
-    lines.push(headers.map(header => String(row[header] ?? '')).join(' | '));
-  }
-  const blob = new Blob([buildPdf(lines)], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
-  link.click();
-  URL.revokeObjectURL(url);
+  doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
 }
