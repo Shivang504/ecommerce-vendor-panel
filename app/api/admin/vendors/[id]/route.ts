@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { hashVendorPassword } from '@/lib/models/vendor';
+import { getUserFromRequest, isAdmin, isVendor } from '@/lib/auth';
+
+function denied() {
+  return Response.json({ error: 'Admin login required' }, { status: 401 });
+}
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const user = getUserFromRequest(request as NextRequest);
+    if (!isAdmin(user) && !(isVendor(user) && user?.id === id)) return denied();
     console.log('[v0] Fetching vendor with ID:', id);
     
     const { db } = await connectToDatabase();
@@ -34,6 +41,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    if (!isAdmin(getUserFromRequest(request as NextRequest))) return denied();
     const { id } = await params;
     const body = await request.json();
     console.log('[v0] Updating vendor:', id);
@@ -91,6 +99,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    if (!isAdmin(getUserFromRequest(request as NextRequest))) return denied();
     const { id } = await params;
     console.log('[v0] Deleting vendor:', id);
     

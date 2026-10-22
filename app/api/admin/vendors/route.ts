@@ -1,16 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ObjectId } from 'mongodb';
 import { connectToDatabase } from '@/lib/mongodb';
 import { hashVendorPassword } from '@/lib/models/vendor';
 import { verifyVendorDetails } from '@/lib/cashfree-secure-id';
+import { getUserFromRequest, isAdmin, isVendor } from '@/lib/auth';
+
+const SELF_SIGNUP_BLOCKED_FIELDS = [
+  '_id',
+  'walletBalance',
+  'totalEarnings',
+  'totalWithdrawn',
+  'totalAdSpend',
+  'verification',
+  'documentsVerified',
+  'role',
+  'permissions',
+];
 
 export async function GET(request: NextRequest) {
   try {
+    const currentUser = getUserFromRequest(request);
+    if (!currentUser || (!isAdmin(currentUser) && !isVendor(currentUser))) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
     const { db } = await connectToDatabase();
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const search = searchParams.get('search');
 
     let query: any = {};
+
+    if (isVendor(currentUser)) {
+      if (!ObjectId.isValid(currentUser.id)) {
+        return NextResponse.json({ vendors: [], total: 0, pending: 0 });
+      }
+      query._id = new ObjectId(currentUser.id);
+    }
 
     if (status) {
       query.status = status;
@@ -52,6 +77,12 @@ export async function POST(request: NextRequest) {
   try {
     const { db } = await connectToDatabase();
     const body = await request.json();
+    const currentUser = getUserFromRequest(request);
+    if (!isAdmin(currentUser)) {
+      for (const field of SELF_SIGNUP_BLOCKED_FIELDS) delete body[field];
+      body.status = 'pending';
+      body.commissionRate = 0;
+    }
 
     // Hash the password if provided
     if (body.password) {
@@ -130,8 +161,9 @@ export async function POST(request: NextRequest) {
         });
     }
 
+    const { password: _password, ...safeVendor } = vendorData;
     return NextResponse.json(
-      { _id: vendorId, ...vendorData },
+      { _id: vendorId, ...safeVendor },
       { status: 201 }
     );
   } catch (error: unknown) {

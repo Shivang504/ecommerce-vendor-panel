@@ -156,6 +156,7 @@ export function Sidebar() {
     },
     { label: 'Orders', href: '/supplier/orders', badge: null, icon: ShoppingCart, allowedRoles: ['superadmin', 'admin', 'vendor'] },
     { label: 'Inventory', href: '/supplier/inventory', badge: null, icon: Boxes, allowedRoles: ['vendor', 'superadmin', 'admin'] },
+    { label: 'Advertise', href: '/supplier/ads', badge: null, icon: Megaphone, allowedRoles: ['vendor'] },
     { label: 'Referral Orders', href: '/supplier/referral-orders', badge: null, icon: Megaphone, allowedRoles: ['vendor'] },
     { label: 'Wallet', href: '/supplier/wallet', badge: null, icon: Wallet, allowedRoles: ['vendor'] },
     {

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { getUserFromRequest, isAdmin } from '@/lib/auth';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    if (!isAdmin(getUserFromRequest(request as NextRequest))) {
+      return Response.json({ error: 'Admin login required' }, { status: 401 });
+    }
     const { id } = await params;
     const { db } = await connectToDatabase();
     
