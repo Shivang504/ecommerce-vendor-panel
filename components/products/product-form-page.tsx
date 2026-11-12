@@ -25,6 +25,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import Dropdown from '../customDropdown/customDropdown';
 import FormField from '../formField/formField';
+import { SizeChartEditor } from '@/components/products/size-chart-editor';
+import { sizesFromVariants, type SizeChart } from '@/lib/size-chart';
 import { MainImageUpload } from '@/components/media/main-image-upload';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { cn, getPlainTextFromHtml } from '@/lib/utils';
@@ -102,6 +104,7 @@ interface Product {
   mainImage: string;
   galleryImages: string[];
   sizeChartImage: string;
+  sizeChart?: SizeChart | null;
   productVideo: string;
   wholesalePriceType: WholesalePriceType;
   jewelleryWeight: number;
@@ -184,6 +187,7 @@ const INITIAL_PRODUCT: Product = {
   mainImage: '',
   galleryImages: [],
   sizeChartImage: '',
+  sizeChart: null,
   productVideo: '',
   wholesalePriceType: 'Fixed',
   jewelleryWeight: 0,
@@ -2978,7 +2982,15 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                         </div>
 
                         <div className='space-y-2'>
-                          <label className='block text-sm font-medium text-slate-700 dark:text-slate-300'>Size Chart (Image)</label>
+                          <label className='block text-sm font-medium text-slate-700 dark:text-slate-300'>Size Chart</label>
+                          <SizeChartEditor
+                            value={formData.sizeChart}
+                            onChange={next => handleChange('sizeChart', next)}
+                            variantSizes={sizesFromVariants(formData.variants)}
+                          />
+                        </div>
+                        <div className='space-y-2'>
+                          <label className='block text-sm font-medium text-slate-700 dark:text-slate-300'>How to Measure Image (optional)</label>
                           <Input
                             type='file'
                             accept='image/*'
