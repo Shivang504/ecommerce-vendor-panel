@@ -3,6 +3,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { hashVendorPassword } from '@/lib/models/vendor';
 import { getUserFromRequest, isAdmin, isVendor } from '@/lib/auth';
+import { sendVendorApprovedEmail } from '@/lib/email-notices';
 
 function denied() {
   return Response.json({ error: 'Admin login required' }, { status: 401 });
@@ -79,6 +80,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
     
     const updatedVendor = await db.collection('vendors').findOne({ _id: new ObjectId(id) });
+
+    if (existingVendor.status !== 'approved' && updatedVendor?.status === 'approved') {
+      try {
+        await sendVendorApprovedEmail(updatedVendor);
+      } catch (emailError) {
+        console.error('[Vendors] Approval email failed:', emailError);
+      }
+    }
 
     // Remove password from response for security
     const { password, ...vendorWithoutPassword } = updatedVendor as any;

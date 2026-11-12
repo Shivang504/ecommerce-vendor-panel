@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { getUserFromRequest, isAdmin } from '@/lib/auth';
+import { sendVendorApprovedEmail } from '@/lib/email-notices';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -11,6 +12,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const { db } = await connectToDatabase();
     
+    const before = await db.collection('vendors').findOne({ _id: new ObjectId(id) }, { projection: { status: 1 } });
     const result = await db.collection('vendors').findOneAndUpdate(
       { _id: new ObjectId(id) },
       { 
@@ -24,6 +26,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (!result) {
       return Response.json({ error: 'Vendor not found' }, { status: 404 });
+    }
+
+    if (before?.status !== 'approved') {
+      try {
+        await sendVendorApprovedEmail(result);
+      } catch (emailError) {
+        console.error('[Vendors] Approval email failed:', emailError);
+      }
     }
 
     return Response.json({
