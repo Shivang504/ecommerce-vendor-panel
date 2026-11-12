@@ -6,7 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, Clock, Eye, EyeOff } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { VENDOR_PENDING_CODE } from '@/lib/vendor-approval';
 import { useSettings } from '@/components/settings/settings-provider';
 
 export default function LoginPage() {
@@ -15,6 +25,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { settings } = useSettings();
@@ -39,6 +50,10 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        if (data.code === VENDOR_PENDING_CODE) {
+          setPendingMessage(data.error);
+          return;
+        }
         console.log('[v0] Login failed:', data.error);
         setError(data.error || 'Login failed');
         return;
@@ -78,6 +93,20 @@ export default function LoginPage() {
 
   return (
     <div className='min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4'>
+      <AlertDialog open={!!pendingMessage} onOpenChange={open => !open && setPendingMessage(null)}>
+        <AlertDialogContent className='max-w-[calc(100vw-32px)] sm:max-w-[440px]' data-testid='vendor-pending-dialog'>
+          <AlertDialogHeader>
+            <div className='mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-amber-600'>
+              <Clock className='h-6 w-6' />
+            </div>
+            <AlertDialogTitle className='text-center'>Account pending approval</AlertDialogTitle>
+            <AlertDialogDescription className='text-center'>{pendingMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className='sm:justify-center'>
+            <AlertDialogAction onClick={() => setPendingMessage(null)}>OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className='w-full max-w-md'>
         <div className='text-center mb-8 space-y-2'>
           {settings.logo ? (

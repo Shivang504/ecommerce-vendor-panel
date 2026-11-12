@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminByEmail } from '@/lib/models/admin';
 import { getVendorByEmail, verifyVendorPassword } from '@/lib/models/vendor';
 import { generateToken } from '@/lib/auth';
+import { vendorLoginBlock } from '@/lib/vendor-approval';
 
 /** Vendor Panel: approved vendors only. Staff admins must use the Admin Panel app. */
 export async function POST(request: NextRequest) {
@@ -29,23 +30,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    if (vendor.status === 'suspended' || vendor.status === 'rejected') {
-      return NextResponse.json(
-        { error: `Your account is ${vendor.status}. Please contact administrator.` },
-        { status: 401 }
-      );
-    }
-
-    if (vendor.status === 'pending') {
-      return NextResponse.json(
-        { error: 'Your account is pending approval. Please wait for admin approval.' },
-        { status: 401 }
-      );
-    }
-
     const passwordMatch = await verifyVendorPassword(password, vendor.password);
     if (!passwordMatch) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+    }
+
+    const blocked = vendorLoginBlock(vendor.status);
+    if (blocked) {
+      return NextResponse.json(blocked, { status: 403 });
     }
 
     const token = generateToken({
