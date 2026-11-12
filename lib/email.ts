@@ -1,77 +1,12 @@
 import nodemailer from 'nodemailer';
+import { cleanEmailList, getEmailRoute, type EmailCategory } from '@/lib/email-routing';
 
-// Email configuration - ZeptoMail SMTP
-// Server: smtp.zeptomail.com
-// Port: 587 (TLS) or 465 (SSL)
-// Template Key: 2d6f.25736a8c4a229c18.k1.3ded67d1-df4d-11f0-abf8-525400d4bb1c.19b46bcaeca
-// Login Template: 2d6f.25736a8c4a229c18.k1.5bc62200-df4e-11f0-abf8-525400d4bb1c.19b46c40020
-const mailConfig = {
-  host: process.env.SMTP_HOST || 'smtp.zeptomail.com', // ZeptoMail SMTP host
-  port: parseInt(process.env.SMTP_PORT || '587'), // 587 for TLS, 465 for SSL
-  secure: process.env.SMTP_SECURE === 'true', // true for 465 (SSL), false for 587 (TLS)
-  auth: {
-    user: process.env.SMTP_USER || 'emailapikey',
-    pass: process.env.SMTP_PASS || 'wSsVR60nr0OhBv97lTaoIuswygxdBQylQ0p+0VSo6iSoGfqT8cc5lETPUw/zG/dLRGFpEjpEpOohnhcG0zAMi498zlsDCiiF9mqRe1U4J3x17qnvhDzIV2tYmxKAKYMJxQ9pmmNmFMwm+g==',
-  },
-  // ZeptoMail requires TLS 1.2 or higher (does not support older TLS versions)
-  tls: {
-    minVersion: 'TLSv1.2',
-    rejectUnauthorized: true,
-  },
-};
-
-// Template IDs for email templates
-export const EMAIL_TEMPLATES = {
-  SIGNUP: process.env.EMAIL_TEMPLATE_SIGNUP || '2d6f.25736a8c4a229c18.k1.3ded67d1-df4d-11f0-abf8-525400d4bb1c.19b46bcaeca',
-  LOGIN: process.env.EMAIL_TEMPLATE_LOGIN || '2d6f.25736a8c4a229c18.k1.5bc62200-df4e-11f0-abf8-525400d4bb1c.19b46c40020',
-};
-
-
-// Create transporter with retry and better connection handling
-const transporter = nodemailer.createTransport({
-  host: mailConfig.host,
-  port: mailConfig.port,
-  secure: mailConfig.secure, // false for 587 (TLS), true for 465 (SSL)
-  auth: mailConfig.auth,
-  tls: {
-    ...mailConfig.tls,
-    // Additional TLS options for better connection stability
-    rejectUnauthorized: true,
-  },
-  // Increase timeout values to handle slow connections
-  connectionTimeout: 30000, // 30 seconds
-  greetingTimeout: 30000, // 30 seconds
-  socketTimeout: 60000, // 60 seconds (keep connection alive longer)
-  // Connection pooling for better reliability
-  pool: true,
-  maxConnections: 3, // Reduced to avoid overwhelming server
-  maxMessages: 50,
-  rateDelta: 1000,
-  rateLimit: 14,
-  // Keep connection alive
-  requireTLS: true,
-  // Disable connection reuse to avoid stale connections
-  disableFileAccess: false,
-  disableUrlAccess: false,
-});
-
-// Verify connection on startup (non-blocking)
-transporter.verify(function (error, success) {
-  if (error) {
-    console.error('[Email] Email server connection error:', {
-      message: error.message,
-      code: error.code,
-      command: error.command,
-    });
-    console.error('[Email] Please check:');
-    console.error('[Email] 1. SMTP_HOST is correct');
-    console.error('[Email] 2. SMTP_USER and SMTP_PASS are correct');
-    console.error('[Email] 3. API key is valid and not expired');
-    console.error('[Email] 4. From email is verified in your email service');
-  } else {
-    console.log('[Email] Email server is ready to send messages');
-  }
-});
+/**
+ * Email delivery. Sender identities (from/CC per email category) come from lib/email-routing.ts.
+ * Transport: Zoho email API (ZOHO_EMAIL_API_KEY overrides the built-in key).
+ */
+const ZOHO_API_URL = process.env.ZOHO_EMAIL_API_URL || 'https://cpaas.zoho.com/v1.1/email';
+const ZOHO_API_KEY = process.env.ZOHO_EMAIL_API_KEY || 'wSsVR60k+xWmDK4um2CpIO1pzV0DBl6lQER531an7H+tSP/F9Mc8kk2YBg+uHfQfEGU7HGNAobotyU1V12da2okqw1wJCCiF9mqRe1U4J3x17qnvhDzMXWlekReKKY0AwAVqn2JoFson+g==';
 
 export interface EmailAttachment {
   filename: string;
@@ -80,136 +15,135 @@ export interface EmailAttachment {
 }
 
 export interface EmailOptions {
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
   text?: string;
   attachments?: EmailAttachment[];
+  /** Picks the sender identity and default CC. Defaults to 'account'. */
+  category?: EmailCategory;
+  /** Extra CC recipients on top of the category's CC list. */
+  cc?: string[];
+  replyTo?: string;
 }
 
-// Retry function with exponential backoff
-async function sendEmailWithRetry(mailOptions: any, maxRetries: number = 3): Promise<any> {
-  let lastError: any;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+function zohoAuthHeader(key: string) {
+  return key.startsWith('Zoho-enczapikey') ? key : `Zoho-enczapikey ${key}`;
+}
+
+async function sendViaZoho(payload: {
+  from: { address: string; name: string };
+  to: string[];
+  cc: string[];
+  replyTo?: string;
+  subject: string;
+  html: string;
+  text?: string;
+  attachments?: EmailAttachment[];
+}) {
+  const body = {
+    from: payload.from,
+    to: payload.to.map(address => ({ email_address: { address } })),
+    ...(payload.cc.length ? { cc: payload.cc.map(address => ({ email_address: { address } })) } : {}),
+    ...(payload.replyTo ? { reply_to: [{ address: payload.replyTo }] } : {}),
+    subject: payload.subject,
+    htmlbody: payload.html,
+    ...(payload.text ? { textbody: payload.text } : {}),
+    ...(payload.attachments?.length
+      ? {
+          attachments: payload.attachments.map(att => ({
+            name: att.filename,
+            mime_type: att.contentType || 'application/pdf',
+            content: att.content.toString('base64'),
+          })),
+        }
+      : {}),
+  };
+
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      // Create a fresh transporter for each retry to avoid stale connections
-      const freshTransporter = attempt === 1 
-        ? transporter 
-        : nodemailer.createTransport({
-            host: mailConfig.host,
-            port: mailConfig.port,
-            secure: mailConfig.secure,
-            auth: mailConfig.auth,
-            tls: {
-              ...mailConfig.tls,
-              rejectUnauthorized: true,
-            },
-            connectionTimeout: 30000,
-            greetingTimeout: 30000,
-            socketTimeout: 60000,
-            requireTLS: true,
-          });
-
-      // Send email with timeout handling
-      const sendPromise = freshTransporter.sendMail(mailOptions);
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Email sending timeout after 25 seconds')), 25000);
+      const response = await fetch(ZOHO_API_URL, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: zohoAuthHeader(ZOHO_API_KEY),
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(20000),
       });
-
-      const info = await Promise.race([sendPromise, timeoutPromise]);
-      
-      // Close the transporter if we created a fresh one
-      if (attempt > 1 && freshTransporter.close) {
-        freshTransporter.close();
-      }
-      
-      return info;
-    } catch (error: any) {
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) return data;
+      const error = new Error(`Zoho email API ${response.status}: ${JSON.stringify(data?.error || data).slice(0, 300)}`);
+      if (response.status < 500 && response.status !== 429) throw Object.assign(error, { retryable: false });
       lastError = error;
-      
-      // Check if error is retryable
-      const isRetryable = error.code === 'ECONNECTION' || 
-                         error.code === 'ETIMEDOUT' || 
-                         error.message?.includes('timeout') ||
-                         error.message?.includes('Connection closed');
-      
-      if (!isRetryable || attempt === maxRetries) {
-        throw error;
-      }
-      
-      // Wait before retrying (exponential backoff)
-      const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-      console.log(`[Email] Retry attempt ${attempt}/${maxRetries} after ${waitTime}ms for error:`, error.code || error.message);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+    } catch (error: any) {
+      if (error?.retryable === false) throw error;
+      lastError = error;
     }
+    await new Promise(resolve => setTimeout(resolve, Math.min(1000 * 2 ** (attempt - 1), 5000)));
   }
-  
   throw lastError;
 }
 
+let smtpTransport: nodemailer.Transporter | null = null;
+function getSmtpTransport() {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
+  if (!smtpTransport) {
+    smtpTransport = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      tls: { minVersion: 'TLSv1.2', rejectUnauthorized: true },
+      connectionTimeout: 30000,
+      socketTimeout: 60000,
+      requireTLS: true,
+    });
+  }
+  return smtpTransport;
+}
+
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
+  const category = options.category || 'account';
+  const route = await getEmailRoute(category);
+  const to = cleanEmailList(options.to);
+  if (to.length === 0) throw new Error('No valid recipient email address');
+  const cc = cleanEmailList([...route.cc, ...(options.cc || [])]).filter(address => !to.includes(address));
+  const replyTo = options.replyTo || route.replyTo;
+
   try {
-    // Use the verified sender email from ZeptoMail
-    // This should be the Domain/Sender Address from your ZeptoMail configuration
-    const fromEmail = process.env.SMTP_FROM_EMAIL || 'support@meelyt.com';
-    
-    if (fromEmail === 'noreply@yourdomain.com') {
-      console.warn('[Email] WARNING: Using default from email. Please set SMTP_FROM_EMAIL environment variable with your verified ZeptoMail sender email.');
+    if (ZOHO_API_KEY) {
+      await sendViaZoho({
+        from: { address: route.fromEmail, name: route.fromName },
+        to,
+        cc,
+        replyTo,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        attachments: options.attachments,
+      });
+    } else {
+      const transport = getSmtpTransport();
+      if (!transport) throw new Error('Email is not configured: set ZOHO_EMAIL_API_KEY (or SMTP_HOST/SMTP_USER/SMTP_PASS)');
+      const info = await transport.sendMail({
+        from: `"${route.fromName}" <${route.fromEmail}>`,
+        to: to.join(', '),
+        ...(cc.length ? { cc: cc.join(', ') } : {}),
+        ...(replyTo ? { replyTo } : {}),
+        subject: options.subject,
+        html: options.html,
+        text: options.text || options.subject,
+        attachments: options.attachments?.map(att => ({ filename: att.filename, content: att.content, contentType: att.contentType || 'application/pdf' })),
+      });
+      if (info.rejected?.length) throw new Error(`Email rejected for recipients: ${info.rejected.join(', ')}`);
     }
-    
-    const mailOptions: any = {
-      from: `"Ecommerce Store" <${fromEmail}>`,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-      text: options.text || options.subject,
-    };
-
-    // Add attachments if provided
-    if (options.attachments && options.attachments.length > 0) {
-      mailOptions.attachments = options.attachments.map(att => ({
-        filename: att.filename,
-        content: att.content,
-        contentType: att.contentType || 'application/pdf',
-      }));
-    }
-
-    console.log('[Email] Attempting to send email to:', options.to);
-    console.log('[Email] SMTP Config:', {
-      host: mailConfig.host,
-      port: mailConfig.port,
-      secure: mailConfig.secure,
-      user: mailConfig.auth.user,
-      fromEmail: fromEmail,
-      passwordLength: mailConfig.auth.pass?.length || 0, // Log length, not actual password
-    });
-
-    // Send email with retry logic
-    const info = await sendEmailWithRetry(mailOptions, 3);
-    
-    console.log('[Email] Email sent successfully:', {
-      messageId: info.messageId,
-      response: info.response,
-      accepted: info.accepted,
-      rejected: info.rejected,
-    });
-    
-    if (info.rejected && info.rejected.length > 0) {
-      console.error('[Email] Some recipients were rejected:', info.rejected);
-      throw new Error(`Email rejected for recipients: ${info.rejected.join(', ')}`);
-    }
-    
+    console.log('[Email] Sent', { category, from: route.fromEmail, to: to.length, cc: cc.length });
     return true;
   } catch (error: any) {
-    console.error('[Email] Error sending email:', {
-      message: error.message,
-      code: error.code,
-      command: error.command,
-      response: error.response,
-      responseCode: error.responseCode,
-      stack: error.stack,
-    });
+    console.error('[Email] Send failed', { category, from: route.fromEmail, message: error?.message });
     throw error;
   }
 }

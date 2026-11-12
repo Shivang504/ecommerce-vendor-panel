@@ -182,33 +182,25 @@ async function notifyWatchers(product: any, title: string, message: string) {
   try {
     const { db } = await connectToDatabase();
     const { sendEmail } = await import('@/lib/email');
-    const admins = await db
-      .collection('admins')
-      .find({ status: { $ne: 'inactive' }, email: { $exists: true, $ne: '' } })
-      .project({ email: 1 })
-      .limit(20)
-      .toArray();
-    const emails = new Set(admins.map(admin => String(admin.email || '').trim()).filter(Boolean));
-
+    const { getAdminEmails } = await import('@/lib/email-routing');
+    let vendorEmail = '';
     if (vendorId && ObjectId.isValid(vendorId)) {
-      const vendor = await db.collection('vendors').findOne({ _id: new ObjectId(vendorId) });
-      const vendorEmail = String(vendor?.email || '').trim();
-      if (vendorEmail) emails.add(vendorEmail);
+      const vendor = await db.collection('vendors').findOne({ _id: new ObjectId(vendorId) }, { projection: { email: 1 } });
+      vendorEmail = String(vendor?.email || '').trim();
     }
 
-    await Promise.all(
-      Array.from(emails).map(email =>
-        sendEmail({
-          to: email,
-          subject: title,
-          html: `<p>${message}</p>`,
-          text: message,
-        }).catch(error => {
-          console.error('[Inventory] Alert email failed:', error);
-          return false;
-        })
-      )
-    );
+    // Vendor-owned products alert the vendor (the category CCs admin); Tryvvo's own products alert admin directly.
+    const recipients = vendorEmail ? [vendorEmail] : await getAdminEmails();
+    await sendEmail({
+      category: vendorEmail ? 'vendor_inventory' : 'admin_alert',
+      to: recipients,
+      subject: title,
+      html: `<p>${message}</p>`,
+      text: message,
+    }).catch(error => {
+      console.error('[Inventory] Alert email failed:', error);
+      return false;
+    });
   } catch (error) {
     console.error('[Inventory] Alert email lookup failed:', error);
   }
@@ -229,6 +221,7 @@ async function notifyBackInStock(product: any, name: string) {
       if (!email) continue;
       try {
         await sendEmail({
+          category: 'order',
           to: email,
           subject: `${product.name || 'A product'} is back in stock`,
           html: `<p>${name} is back in stock. You can order it now.</p>`,

@@ -149,6 +149,7 @@ export async function POST(
           : `Refund Processed - ${updatedOrder.orderNumber}`;
 
         await sendEmail({
+          category: 'order',
           to: updatedOrder.customerEmail,
           subject: subject,
           html: emailHTML,

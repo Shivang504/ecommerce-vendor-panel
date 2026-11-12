@@ -669,7 +669,7 @@ export function generateOTPEmailHTML(data: {
   expiryMinutes?: number;
 }): string {
   const siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'Ecommerce Store';
-  const supportEmail = process.env.SMTP_FROM_EMAIL || process.env.SUPPORT_EMAIL || 'support@example.com';
+  const supportEmail = process.env.SUPPORT_EMAIL || 'support@tryvvo.com';
   const supportPhone = process.env.SUPPORT_PHONE || '';
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://e-commrce-xi.vercel.app';
   const isLogin = data.purpose === 'login';

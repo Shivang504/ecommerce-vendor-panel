@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
     );
 
     await sendEmail({
+      category: 'account',
       to: vendor.email,
       subject: 'Reset your password',
       html,

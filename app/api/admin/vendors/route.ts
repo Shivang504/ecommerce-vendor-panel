@@ -4,6 +4,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import { hashVendorPassword } from '@/lib/models/vendor';
 import { verifyVendorDetails } from '@/lib/cashfree-secure-id';
 import { getUserFromRequest, isAdmin, isVendor } from '@/lib/auth';
+import { sendVendorOnboardingEmail } from '@/lib/email-notices';
 
 const SELF_SIGNUP_BLOCKED_FIELDS = [
   '_id',
@@ -108,6 +109,12 @@ export async function POST(request: NextRequest) {
 
     const result = await db.collection('vendors').insertOne(vendorData);
     const vendorId = result.insertedId.toString();
+
+    try {
+      await sendVendorOnboardingEmail({ email: vendorData.email, storeName: vendorData.storeName, ownerName: vendorData.ownerName, status: vendorData.status });
+    } catch (emailError) {
+      console.error('[Vendors] Onboarding email failed:', emailError);
+    }
 
     // Trigger Cashfree verification asynchronously (don't block vendor creation)
     // Verification will be updated via webhook or can be checked later

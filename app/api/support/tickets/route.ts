@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
         });
 
         await sendEmail({
+          category: 'customer_support',
           to: customer.email,
           subject: `Support Ticket Created - ${ticket.ticketNumber}`,
           html: emailHTML,

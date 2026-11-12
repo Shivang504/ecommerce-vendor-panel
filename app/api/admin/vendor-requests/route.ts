@@ -10,6 +10,7 @@ import {
 } from '@/lib/models/vendor-admin-request';
 import { getVendorById } from '@/lib/models/vendor';
 import { createNotification } from '@/lib/models/notification';
+import { sendVendorRequestReceivedEmail } from '@/lib/email-notices';
 
 const ALLOWED_TYPES: VendorAdminRequestType[] = [
   'new_catalogue_category',
@@ -132,6 +133,19 @@ export async function POST(request: NextRequest) {
       });
     } catch (e) {
       console.error('[vendor-requests POST] notification', e);
+    }
+
+    try {
+      await sendVendorRequestReceivedEmail({
+        id: insertedId.toString(),
+        vendorEmail: (vendor.email as string) || '',
+        vendorName: (vendor.ownerName as string) || (vendor.storeName as string) || '',
+        requestType,
+        subject,
+        message,
+      });
+    } catch (e) {
+      console.error('[vendor-requests POST] email', e);
     }
 
     return NextResponse.json(
