@@ -60,16 +60,16 @@ export async function sendVendorOnboardingEmail(vendor: VendorLike) {
 }
 
 /** Confirmation email once an admin approves a vendor (vendor onboarding identity, CC admin). */
+export const VENDOR_APPROVED_MESSAGE =
+  'Congratulations! Your Tryvvo Vendor account has been approved successfully. You can now log in to the Tryvvo Vendor Portal using your registered credentials and start managing your products, inventory, orders, and business activities on Tryvvo.';
+
 export async function sendVendorApprovedEmail(vendor: VendorLike) {
   const to = String(vendor.email || '').trim();
   if (!to) return false;
   const html = renderNotice({
-    heading: 'Your Tryvvo vendor account is approved',
+    heading: 'Your Tryvvo Vendor account is approved',
     greeting: `Hi ${vendor.ownerName || vendor.storeName || 'there'},`,
-    paragraphs: [
-      'Good news! Your details have been verified and your vendor account has been approved.',
-      'You can now log in to the Tryvvo Vendor Portal and start managing your business.',
-    ],
+    paragraphs: [VENDOR_APPROVED_MESSAGE, 'Welcome aboard!'],
     details: [
       ['Store name', vendor.storeName || '-'],
       ['Login email', to],
@@ -77,7 +77,7 @@ export async function sendVendorApprovedEmail(vendor: VendorLike) {
     ],
     cta: { label: 'Log in to Vendor Portal', url: `${supplierUrl()}/login` },
   });
-  return sendEmail({ category: 'vendor_onboarding', to, subject: 'Your Tryvvo vendor account is approved', html });
+  return sendEmail({ category: 'vendor_onboarding', to, subject: 'Congratulations! Your Tryvvo Vendor account is approved', html });
 }
 
 type VendorRequestLike = { vendorEmail?: string; vendorName?: string; subject?: string; message?: string; requestType?: string; status?: string; adminReply?: string };
