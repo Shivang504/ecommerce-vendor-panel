@@ -7,6 +7,7 @@ import { cleanEmailList, getEmailRoute, type EmailCategory } from '@/lib/email-r
  */
 const ZOHO_API_URL = process.env.ZOHO_EMAIL_API_URL || 'https://cpaas.zoho.com/v1.1/email';
 const ZOHO_API_KEY = process.env.ZOHO_EMAIL_API_KEY || 'wSsVR60k+xWmDK4um2CpIO1pzV0DBl6lQER531an7H+tSP/F9Mc8kk2YBg+uHfQfEGU7HGNAobotyU1V12da2okqw1wJCCiF9mqRe1U4J3x17qnvhDzMXWlekReKKY0AwAVqn2JoFson+g==';
+const FALLBACK_SENDER = process.env.EMAIL_FALLBACK_FROM || 'support@tryvvo.com';
 
 export interface EmailAttachment {
   filename: string;
@@ -113,9 +114,10 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
   const cc = cleanEmailList([...route.cc, ...(options.cc || [])]).filter(address => !to.includes(address));
   const replyTo = options.replyTo || route.replyTo;
 
+  let sentFrom = route.fromEmail;
   try {
     if (ZOHO_API_KEY) {
-      await sendViaZoho({
+      const payload = {
         from: { address: route.fromEmail, name: route.fromName },
         to,
         cc,
@@ -124,7 +126,16 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
         html: options.html,
         text: options.text,
         attachments: options.attachments,
-      });
+      };
+      try {
+        await sendViaZoho(payload);
+      } catch (error: any) {
+        // SM_147: the sender address is not added in Zoho yet; deliver from the fallback sender instead of failing.
+        if (!/SM_147/.test(String(error?.message)) || route.fromEmail === FALLBACK_SENDER) throw error;
+        console.warn('[Email] Sender not set up in Zoho, using fallback sender', { category, from: route.fromEmail, fallback: FALLBACK_SENDER });
+        sentFrom = FALLBACK_SENDER;
+        await sendViaZoho({ ...payload, from: { address: FALLBACK_SENDER, name: route.fromName } });
+      }
     } else {
       const transport = getSmtpTransport();
       if (!transport) throw new Error('Email is not configured: set ZOHO_EMAIL_API_KEY (or SMTP_HOST/SMTP_USER/SMTP_PASS)');
@@ -140,7 +151,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       });
       if (info.rejected?.length) throw new Error(`Email rejected for recipients: ${info.rejected.join(', ')}`);
     }
-    console.log('[Email] Sent', { category, from: route.fromEmail, to: to.length, cc: cc.length });
+    console.log('[Email] Sent', { category, from: sentFrom, to: to.length, cc: cc.length });
     return true;
   } catch (error: any) {
     console.error('[Email] Send failed', { category, from: route.fromEmail, message: error?.message });

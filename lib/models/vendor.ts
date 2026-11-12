@@ -173,3 +173,36 @@ export async function setVendorResetPasswordToken(vendorId: string, token: strin
     }
   );
 }
+
+export async function verifyVendorResetPasswordToken(token: string): Promise<{
+  success: boolean;
+  vendorId?: string;
+  error?: string;
+  expired?: boolean;
+}> {
+  const { db } = await connectToDatabase();
+  const vendor = await db.collection('vendors').findOne({ resetPasswordToken: token });
+
+  if (!vendor) {
+    return { success: false, error: 'Invalid reset link. Request a new one.' };
+  }
+
+  if (!vendor.resetPasswordTokenExpiry || vendor.resetPasswordTokenExpiry < new Date()) {
+    return { success: false, error: 'This reset link has expired. Request a new one.', expired: true };
+  }
+
+  return { success: true, vendorId: vendor._id.toString() };
+}
+
+export async function resetVendorPassword(vendorId: string, newPassword: string) {
+  const { db } = await connectToDatabase();
+  const hashedPassword = await hashVendorPassword(newPassword);
+
+  await db.collection('vendors').updateOne(
+    { _id: new ObjectId(vendorId) },
+    {
+      $set: { password: hashedPassword, updatedAt: new Date() },
+      $unset: { resetPasswordToken: '', resetPasswordTokenExpiry: '' },
+    }
+  );
+}

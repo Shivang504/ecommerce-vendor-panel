@@ -10,6 +10,7 @@ export type EmailCategory =
   | 'order'
   | 'customer_support'
   | 'account'
+  | 'password_reset'
   | 'vendor_order'
   | 'vendor_inventory'
   | 'vendor_support'
@@ -36,8 +37,13 @@ export const EMAIL_CATEGORIES: Record<EmailCategory, { label: string; descriptio
   },
   account: {
     label: 'Customer account',
-    description: 'Login/signup OTP, email verification and password reset for customers and panel users.',
+    description: 'Login/signup OTP and email verification for customers.',
     defaults: { fromEmail: 'support@tryvvo.com', fromName: 'Tryvvo', cc: [] },
+  },
+  password_reset: {
+    label: 'Password reset',
+    description: 'Reset password links for customers, vendors and admins.',
+    defaults: { fromEmail: 'info@tryvvo.com', fromName: 'Tryvvo', cc: [] },
   },
   vendor_order: {
     label: 'Vendor order notifications',

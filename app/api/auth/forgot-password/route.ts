@@ -52,8 +52,12 @@ export async function POST(request: NextRequest) {
     const token = generateVendorResetPasswordToken();
     await setVendorResetPasswordToken(vendor._id.toString(), token);
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
-    const resetLink = `${baseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
+    const forwardedHost = request.headers.get('x-forwarded-host');
+    const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+    const origin = forwardedHost
+      ? `${forwardedProto}://${forwardedHost.split(',')[0].trim()}`
+      : request.nextUrl.origin;
+    const resetLink = `${origin.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
 
     const requestedVia = isEmail(identifier) ? 'email' : 'mobile number';
     const html = generatePasswordResetEmailHTML(vendor.ownerName || vendor.storeName || 'Vendor', resetLink).replace(
@@ -62,7 +66,7 @@ export async function POST(request: NextRequest) {
     );
 
     await sendEmail({
-      category: 'account',
+      category: 'password_reset',
       to: vendor.email,
       subject: 'Reset your password',
       html,
