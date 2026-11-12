@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { DuplicateEmailDialog } from '@/components/auth/duplicate-email-dialog';
+import { isDuplicateEmailResponse } from '@/lib/duplicate-email';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,6 +44,7 @@ export function UserFormPage({ adminId }: UserFormPageProps) {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [duplicateEmail, setDuplicateEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(!!adminId);
   const [initialData, setInitialData] = useState<AdminFormData | null>(null);
 
@@ -143,6 +146,11 @@ export function UserFormPage({ adminId }: UserFormPageProps) {
         body: JSON.stringify(dataToSend),
       });
 
+      if (isDuplicateEmailResponse(response.status, await response.clone().json().catch(() => null))) {
+        setDuplicateEmail(String(formData.email || '').trim());
+        return;
+      }
+
       if (response.ok) {
         toast({
           title: 'Success',
@@ -191,6 +199,7 @@ export function UserFormPage({ adminId }: UserFormPageProps) {
 
   return (
     <div className='min-h-screen bg-gray-50 p-4 md:p-6 lg:p-8'>
+      <DuplicateEmailDialog open={!!duplicateEmail} email={duplicateEmail || undefined} onClose={() => setDuplicateEmail(null)} />
       <div className='max-w-5xl mx-auto space-y-6'>
         <div className='bg-white rounded-lg shadow-sm p-4 md:p-6'>
           <div className='flex items-center gap-4'>

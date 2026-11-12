@@ -4,6 +4,7 @@ import { ObjectId } from 'mongodb';
 import { verifyPassword } from '@/lib/models/admin';
 import { getUserFromRequest, isAdmin, isVendor } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
+import { duplicateEmailBody, emailMatcher } from '@/lib/duplicate-email';
 
 export async function GET(request: NextRequest) {
   try {
@@ -123,12 +124,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const existingAdmin = await db.collection('admins').findOne({ email: body.email });
+    const existingAdmin = await db.collection('admins').findOne({ email: emailMatcher(body.email) }, { projection: { _id: 1 } });
     if (existingAdmin) {
-      return NextResponse.json(
-        { error: 'User with this email already exists' },
-        { status: 400 }
-      );
+      return NextResponse.json(duplicateEmailBody(), { status: 409 });
     }
 
     const hashedPassword = await bcrypt.hash(body.password, 10);

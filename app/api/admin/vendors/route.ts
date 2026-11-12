@@ -5,6 +5,7 @@ import { hashVendorPassword } from '@/lib/models/vendor';
 import { verifyVendorDetails } from '@/lib/cashfree-secure-id';
 import { getUserFromRequest, isAdmin, isVendor } from '@/lib/auth';
 import { sendVendorOnboardingEmail } from '@/lib/email-notices';
+import { duplicateEmailBody, emailMatcher } from '@/lib/duplicate-email';
 
 const SELF_SIGNUP_BLOCKED_FIELDS = [
   '_id',
@@ -83,6 +84,15 @@ export async function POST(request: NextRequest) {
       for (const field of SELF_SIGNUP_BLOCKED_FIELDS) delete body[field];
       body.status = 'pending';
       body.commissionRate = 0;
+    }
+
+    const email = typeof body.email === 'string' ? body.email.trim() : '';
+    if (email) {
+      body.email = email;
+      const existingVendor = await db.collection('vendors').findOne({ email: emailMatcher(email) }, { projection: { _id: 1 } });
+      if (existingVendor) {
+        return NextResponse.json(duplicateEmailBody(), { status: 409 });
+      }
     }
 
     // Hash the password if provided
@@ -180,14 +190,8 @@ export async function POST(request: NextRequest) {
     const mongoError = error as { code?: number; keyPattern?: Record<string, unknown> };
     if (mongoError?.code === 11000) {
       const isEmail = mongoError?.keyPattern && 'email' in (mongoError.keyPattern ?? {});
-      return NextResponse.json(
-        {
-          error: isEmail
-            ? 'A vendor with this email is already registered. Please use a different email or sign in.'
-            : 'A vendor record already exists with these details.',
-        },
-        { status: 409 }
-      );
+      if (isEmail) return NextResponse.json(duplicateEmailBody(), { status: 409 });
+      return NextResponse.json({ error: 'A vendor record already exists with these details.' }, { status: 409 });
     }
 
     return NextResponse.json(
