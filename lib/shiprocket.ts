@@ -1603,9 +1603,12 @@ export async function createShiprocketOrder(
       });
     }
 
+    // Always unique: Shiprocket reuses canceled shipments when order_id matches a prior create.
+    const primaryOrderId = `${orderData.orderNumber}-R${Date.now()}`;
+
     // Build request body
     const requestBody: any = {
-      order_id: orderData.orderNumber, // Use our order number as Shiprocket order_id
+      order_id: primaryOrderId,
       order_date: formattedOrderDate,
       billing_customer_name: orderData.billingAddress.name.split(' ')[0] || orderData.billingAddress.name,
       billing_last_name: orderData.billingAddress.name.split(' ').slice(1).join(' ') || '',
