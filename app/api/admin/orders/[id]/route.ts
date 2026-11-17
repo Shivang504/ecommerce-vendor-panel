@@ -501,28 +501,40 @@ export async function PUT(
               ...(serviceabilityResult.couriers.length > 5 && { moreAvailable: serviceabilityResult.couriers.length - 5 }),
             });
             
-            // Use checkout-selected courier when still serviceable
+            // Lock to checkout-selected courier so customer shipping price does not change
             let fastestCourierId: number | undefined = undefined;
             let fastestCourierName: string | undefined = undefined;
-            if (serviceabilityResult.isServiceable && serviceabilityResult.couriers.length > 0) {
-              const { resolveCourierForShipment } = await import('@/lib/shiprocket');
-              const preferredCourierId = (currentOrder as any).selectedCourier?.courierId;
-              const selectedCourier = resolveCourierForShipment(
-                serviceabilityResult.couriers,
-                preferredCourierId
-              );
-              if (selectedCourier) {
-                fastestCourierId = selectedCourier.courierId;
-                fastestCourierName = selectedCourier.courierName;
-              }
+            const checkoutCourier = (currentOrder as any).selectedCourier as
+              | {
+                  courierId?: number;
+                  courierName?: string;
+                  rate?: number;
+                  estimatedDays?: number;
+                }
+              | undefined;
+            const { resolveCourierForShipment } = await import('@/lib/shiprocket');
+            const lockedCourier = resolveCourierForShipment(
+              serviceabilityResult.couriers || [],
+              checkoutCourier?.courierId,
+              checkoutCourier
+            );
+            if (lockedCourier) {
+              fastestCourierId = lockedCourier.courierId;
+              fastestCourierName = lockedCourier.courierName;
               console.log('[Ready for Pickup] 🚚 Courier Selected:', {
                 courierId: fastestCourierId,
                 courierName: fastestCourierName,
-                source: preferredCourierId && fastestCourierId === preferredCourierId ? 'checkout' : 'pickup-fallback',
-                checkoutCourierId: preferredCourierId || 'none',
+                rate: lockedCourier.rate,
+                source:
+                  checkoutCourier?.courierId &&
+                  fastestCourierId === checkoutCourier.courierId
+                    ? 'checkout-locked'
+                    : 'pickup-cheapest-fallback',
+                checkoutCourierId: checkoutCourier?.courierId || 'none',
+                checkoutRate: checkoutCourier?.rate ?? null,
               });
             } else {
-              console.warn('[Ready for Pickup] ⚠️ No serviceable couriers found!');
+              console.warn('[Ready for Pickup] ⚠️ No checkout courier and no serviceable couriers found!');
             }
             
             // Create Shiprocket order

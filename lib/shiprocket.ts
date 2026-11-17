@@ -346,13 +346,20 @@ export type ShiprocketCourierOption = {
   rate: number;
 };
 
-/** Prefer checkout-selected courier when still serviceable; otherwise cheapest. */
+/**
+ * Prefer checkout-selected courier so shipping price stays locked.
+ * If that courier is missing from live serviceability, still return it for AWB.
+ * Only fall back to cheapest when no checkout courier was saved.
+ */
 export function resolveCourierForShipment(
   couriers: ShiprocketCourierOption[],
-  preferredCourierId?: number
+  preferredCourierId?: number,
+  preferredMeta?: {
+    courierName?: string;
+    rate?: number;
+    estimatedDays?: number;
+  }
 ): ShiprocketCourierOption | undefined {
-  if (couriers.length === 0) return undefined;
-
   if (preferredCourierId) {
     const preferred = couriers.find(c => c.courierId === preferredCourierId);
     if (preferred) {
@@ -363,9 +370,23 @@ export function resolveCourierForShipment(
       });
       return preferred;
     }
-    console.warn('[Shiprocket] Checkout courier unavailable at pickup, using cheapest fallback:', preferredCourierId);
+    console.warn(
+      '[Shiprocket] Checkout courier not in live list — locking AWB to checkout courier (price lock):',
+      {
+        preferredCourierId,
+        courierName: preferredMeta?.courierName,
+        rate: preferredMeta?.rate,
+      }
+    );
+    return {
+      courierId: preferredCourierId,
+      courierName: preferredMeta?.courierName || `Courier ${preferredCourierId}`,
+      estimatedDays: preferredMeta?.estimatedDays ?? 0,
+      rate: preferredMeta?.rate ?? 0,
+    };
   }
 
+  if (couriers.length === 0) return undefined;
   return selectCheapestCourier(couriers);
 }
 
@@ -1307,7 +1328,7 @@ async function findPickupLocation(
 ): Promise<ShiprocketPickupLocation | null> {
   try {
     const locations = await getShiprocketPickupLocations();
-
+    
     if (locations.length === 0) {
       return null;
     }
@@ -1315,8 +1336,8 @@ async function findPickupLocation(
     if (warehouseName) {
       const matchedByName = locations.find(
         loc =>
-          loc.pickup_location.toLowerCase().includes(warehouseName.toLowerCase()) ||
-          warehouseName.toLowerCase().includes(loc.pickup_location.toLowerCase())
+        loc.pickup_location.toLowerCase().includes(warehouseName.toLowerCase()) ||
+        warehouseName.toLowerCase().includes(loc.pickup_location.toLowerCase())
       );
       if (matchedByName) {
         srLog('pickup_location.matched_by_name', {
@@ -2525,8 +2546,8 @@ export async function cancelShiprocketOrder(
         shipmentId,
         orderNumber
       );
-      if (fetchedOrderId) {
-        cancelId = fetchedOrderId;
+          if (fetchedOrderId) {
+            cancelId = fetchedOrderId;
         console.log('[Shiprocket] 📋 Fetched numeric order_id for cancellation:', {
           shipmentId,
           cancelId,
@@ -2633,7 +2654,7 @@ export async function cancelShiprocketOrder(
         error: errorMessage,
       };
     }
-
+    
     if (Number.isFinite(statusCode) && statusCode !== 200) {
       const errorMessage = (responseData as any).message;
       console.error('[Shiprocket] ❌ Cancel order failed:', {
