@@ -132,8 +132,8 @@ export function Sidebar() {
     localStorage.setItem('sidebarOpen', String(newState));
   };
 
-  const primaryColor = settings.primaryColor || '#22C55E';
-  const accentColor = settings.accentColor || '#16A34A';
+  const primaryColor = settings.primaryColor || '#5C2D91';
+  const accentColor = settings.accentColor || '#066A2B';
 
   const brandBadgeStyle = useMemo(
     () => ({
@@ -499,11 +499,11 @@ export function Sidebar() {
       <div className='p-4 flex items-center justify-between border-gray-200'>
         {isOpen ? (
           <>
-            <div className='flex items-center gap-2.5'>
+            <div className='flex min-w-0 items-center gap-2.5'>
               <div
-                className='w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-base overflow-hidden'
-                >
-                {loading ? <div className='w-full h-full animate-pulse bg-gray-200' /> : null}
+                className='flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl text-base font-bold text-white'
+                style={brandBadgeStyle}>
+                {loading ? <div className='h-full w-full animate-pulse bg-gray-200' /> : null}
 
                 {brandLogo ? (
                   <img
@@ -516,10 +516,13 @@ export function Sidebar() {
                 )}
               </div>
               {loading ? (
-                <div className='h-4 w-24 bg-gray-200 rounded animate-pulse' />
+                <div className='h-4 w-24 animate-pulse rounded bg-gray-200' />
               ) : (
-                <span className='text-gray-900 font-bold text-base truncate'>{'E-commerce Supplier'}</span>
-              )}{' '}
+                <div className='min-w-0'>
+                  <p className='truncate text-base font-bold text-[#5C2D91]'>{brandName || 'TRYVVO'}</p>
+                  <p className='truncate text-[11px] font-medium text-[#6B6480]'>E-Commerce Supplier</p>
+                </div>
+              )}
             </div>
             <button onClick={toggleSidebar} className='p-1.5 rounded-lg hover:bg-gray-50 transition-colors' aria-label='Collapse sidebar'>
               <ChevronLeft className='w-5 h-5 text-gray-600' />
@@ -854,26 +857,25 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className='p-3 border-t border-gray-200'>
+      <div className='border-t border-[#EDE7F6] p-3'>
         <div
-          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all
-    ${isOpen ? 'bg-gray-50 hover:bg-gray-50' : 'hover:bg-gray-50'}
-  `}>
-          {/* Profile Avatar */}
+          className={`flex items-center gap-3 rounded-xl px-3 py-3 transition-all ${
+            isOpen ? 'bg-[#F6F1FC]' : 'hover:bg-[#F6F1FC]'
+          }`}>
           <div
-            className='w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm '
+            className='flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white'
             style={brandBadgeStyle}>
             {userData ? getInitials(userData.name) : brandInitials}
           </div>
 
           {isOpen && (
-            <div className='flex-1 min-w-0 cursor-pointer'>
-              <p className='text-sm font-semibold text-gray-900 truncate'>{userData?.name || 'Admin'}</p>
-
+            <div className='min-w-0 flex-1 cursor-pointer'>
+              <p className='truncate text-sm font-semibold text-[#1F1535]'>{userData?.name || 'Admin'}</p>
+              <p className='text-[11px] font-medium text-[#6B6480]'>Seller Account</p>
               <button
                 onClick={handleLogout}
-                className='flex items-center gap-2 text-xs cursor-pointer text-gray-600 hover:text-red-600 font-medium transition-colors'>
-                <LogOut className='w-3.5 h-3.5' />
+                className='mt-1 flex cursor-pointer items-center gap-2 text-xs font-medium text-[#6B6480] transition-colors hover:text-red-600'>
+                <LogOut className='h-3.5 w-3.5' />
                 Logout
               </button>
             </div>

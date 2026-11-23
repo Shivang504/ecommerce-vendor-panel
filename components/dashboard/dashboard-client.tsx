@@ -33,9 +33,12 @@ import {
 } from 'recharts';
 import { useSettings } from '@/components/settings/settings-provider';
 
-/** Matches storefront `--web` (see globals.css) */
-const BRAND_WEB = '#401d5d';
-const BRAND_MUTED = '#6b4d7a';
+import { VENDOR_GREEN, VENDOR_GREEN_SOFT, VENDOR_PURPLE, VENDOR_PURPLE_SOFT } from '@/lib/vendor-ui-theme';
+
+/** Vendor Final Design palette */
+const BRAND_WEB = VENDOR_PURPLE;
+const BRAND_MUTED = '#6B6480';
+const BRAND_GREEN = VENDOR_GREEN;
 
 interface DashboardData {
   stats: {
@@ -71,8 +74,20 @@ export function DashboardClient() {
   const [{ year, month }, setSelectedMonth] = useState(getInitialMonth);
   const [periodLabel, setPeriodLabel] = useState('This month');
 
-  const siteLabel = settings.siteName?.trim() || 'Store';
-  const dashboardTitle = `${siteLabel} · Admin`;
+  const siteLabel = settings.siteName?.trim() || 'Tryvvo';
+  const [welcomeName, setWelcomeName] = useState('Seller');
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('adminUser');
+      if (!raw) return;
+      const user = JSON.parse(raw);
+      const name = String(user?.storeName || user?.name || 'Seller').trim();
+      setWelcomeName(name.split(' ')[0] || 'Seller');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const fetchDashboard = useCallback(async (selectedYear: number, selectedMonth: number) => {
     try {
@@ -222,41 +237,43 @@ export function DashboardClient() {
   };
 
   const kpiItems = [
-    { label: 'Total orders', stat: data.stats.totalOrders, icon: ShoppingBag },
-    { label: 'Pending', stat: data.stats.pendingOrders, icon: Clock },
-    { label: 'Cancelled', stat: data.stats.cancelledOrders, icon: XCircle },
-    { label: 'Returns', stat: data.stats.returnedItems, icon: RotateCcw },
+    { label: 'Total Orders', stat: data.stats.totalOrders, icon: ShoppingBag, soft: VENDOR_PURPLE_SOFT, accent: BRAND_WEB },
+    { label: 'Pending', stat: data.stats.pendingOrders, icon: Clock, soft: VENDOR_GREEN_SOFT, accent: BRAND_GREEN },
+    { label: 'Cancelled', stat: data.stats.cancelledOrders, icon: XCircle, soft: VENDOR_PURPLE_SOFT, accent: BRAND_WEB },
+    { label: 'Returns', stat: data.stats.returnedItems, icon: RotateCcw, soft: VENDOR_GREEN_SOFT, accent: BRAND_GREEN },
   ];
 
   return (
-    <div className='min-h-full space-y-6 bg-gradient-to-b from-slate-50/80 to-white pb-10'>
-      <div className='border-b border-slate-200/80 bg-white/90 px-4 py-5 shadow-sm sm:px-6 lg:px-8'>
-        <div className='mx-auto flex max-w-[1600px] flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
+    <div className='min-h-full space-y-6 pb-10'>
+      <div className='mx-auto max-w-[1600px] rounded-[24px] border border-[#EDE7F6] bg-white/90 px-4 py-5 shadow-sm sm:px-6 lg:px-8'>
+        <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
             <p className='text-xs font-semibold uppercase tracking-wider' style={{ color: BRAND_MUTED }}>
               Overview
             </p>
-            <h1 className='text-2xl font-bold tracking-tight text-slate-900'>{dashboardTitle}</h1>
-            <p className='mt-1 text-sm text-slate-500'>Orders, revenue, and catalog — aligned with your storefront.</p>
+            <h1 className='text-2xl font-bold tracking-tight' style={{ color: BRAND_WEB }}>
+              Welcome back, {welcomeName} 👋
+            </h1>
+            <p className='mt-1 text-sm text-[#5A5270]'>Here&apos;s what&apos;s happening with your store on {siteLabel}.</p>
           </div>
           <div className='flex flex-wrap items-center gap-2'>
-            <div className='flex items-center rounded-lg border border-slate-200 bg-white'>
+            <div className='flex items-center rounded-full border border-[#E4DFF0] bg-white'>
               <button
                 type='button'
                 onClick={goToPreviousMonth}
                 disabled={loading}
-                className='rounded-l-lg p-2 text-slate-600 transition hover:bg-slate-50 disabled:opacity-50'
+                className='rounded-l-full p-2 text-[#5A5270] transition hover:bg-[#F6F1FC] disabled:opacity-50'
                 aria-label='Previous month'>
                 <ChevronLeft className='h-4 w-4' />
               </button>
-              <span className='min-w-[120px] px-2 text-center text-sm font-medium text-slate-700'>
+              <span className='min-w-[120px] px-2 text-center text-sm font-medium text-[#1F1535]'>
                 {periodLabel}
               </span>
               <button
                 type='button'
                 onClick={goToNextMonth}
                 disabled={loading || !canGoToNextMonth(year, month)}
-                className='rounded-r-lg p-2 text-slate-600 transition hover:bg-slate-50 disabled:opacity-50'
+                className='rounded-r-full p-2 text-[#5A5270] transition hover:bg-[#F6F1FC] disabled:opacity-50'
                 aria-label='Next month'>
                 <ChevronRight className='h-4 w-4' />
               </button>
@@ -265,7 +282,7 @@ export function DashboardClient() {
               type='button'
               onClick={handleExport}
               disabled={exporting || loading || !data}
-              className='inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60'
+              className='inline-flex cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60'
               style={{ backgroundColor: BRAND_WEB }}>
               {exporting ? (
                 <Loader2 className='h-4 w-4 animate-spin' />
@@ -278,30 +295,35 @@ export function DashboardClient() {
         </div>
       </div>
 
-      <div className='mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8'>
+      <div className='mx-auto max-w-[1600px] space-y-6'>
         {/* KPI */}
         <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4'>
           {kpiItems.map((item, index) => (
             <Card
               key={index}
-              className='border border-slate-100 bg-white p-5 shadow-sm transition hover:shadow-md'
-              style={{ borderTopWidth: 3, borderTopColor: BRAND_WEB }}>
+              className='border-0 p-5 shadow-sm transition hover:shadow-md'
+              style={{ backgroundColor: item.soft }}>
               <div className='mb-3 flex items-start justify-between'>
-                <p className='text-sm font-medium text-slate-600'>{item.label}</p>
-                <item.icon className='h-4 w-4' style={{ color: BRAND_MUTED }} />
+                <p className='text-sm font-semibold text-[#3A3350]'>{item.label}</p>
+                <span
+                  className='flex h-9 w-9 items-center justify-center rounded-full bg-white/80'
+                  style={{ color: item.accent }}>
+                  <item.icon className='h-4 w-4' />
+                </span>
               </div>
-              <p className='mb-2 text-3xl font-bold tabular-nums text-slate-900'>{item.stat.value}</p>
+              <p className='mb-2 text-3xl font-bold tabular-nums text-[#1F1535]'>{item.stat.value}</p>
               <div className='flex items-center gap-1'>
                 {item.stat.trend === 'down' ? (
                   <ArrowDownRight className='h-4 w-4 text-red-500' />
                 ) : (
-                  <ArrowUpRight className='h-4 w-4 text-emerald-600' />
+                  <ArrowUpRight className='h-4 w-4' style={{ color: BRAND_GREEN }} />
                 )}
                 <span
                   className={`text-xs font-semibold ${
-                    item.stat.trend === 'down' ? 'text-red-600' : 'text-emerald-600'
-                  }`}>
-                  {item.stat.change}
+                    item.stat.trend === 'down' ? 'text-red-600' : ''
+                  }`}
+                  style={item.stat.trend === 'down' ? undefined : { color: BRAND_GREEN }}>
+                  {item.stat.change === '0%' || !item.stat.change ? 'No prior data' : item.stat.change}
                 </span>
               </div>
             </Card>
@@ -310,10 +332,10 @@ export function DashboardClient() {
 
         <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
           {/* Revenue */}
-          <Card className='border border-slate-100 bg-white shadow-sm'>
+          <Card className='rounded-[20px] border border-[#EDE7F6] bg-white shadow-sm'>
             <div className='p-6'>
               <div className='mb-4 flex items-center justify-between'>
-                <h3 className='text-lg font-bold text-slate-900'>Revenue & shipping</h3>
+                <h3 className='text-lg font-bold' style={{ color: BRAND_WEB }}>Revenue & Shipping</h3>
               </div>
               <div className='mb-4 flex flex-wrap items-center justify-between gap-4'>
                 <div className='flex gap-6'>
@@ -370,10 +392,10 @@ export function DashboardClient() {
           </Card>
 
           {/* Category mix */}
-          <Card className='border border-slate-100 bg-white shadow-sm'>
+          <Card className='rounded-[20px] border border-[#EDE7F6] bg-white shadow-sm'>
             <div className='p-6'>
               <div className='mb-4 flex items-center justify-between'>
-                <h3 className='text-lg font-bold text-slate-900'>Catalog by category</h3>
+                <h3 className='text-lg font-bold' style={{ color: BRAND_WEB }}>Catalog by Category</h3>
                 <MoreVertical className='h-4 w-4 text-slate-400' />
               </div>
               <div className='mb-4'>

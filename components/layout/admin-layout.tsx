@@ -38,12 +38,22 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-      <div className="flex h-screen">
+      <div className="flex h-screen bg-[#FAF8FD]">
         <Sidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="flex min-w-0 flex-1 flex-col">
           <TopBar />
-          <main className="flex-1 overflow-auto bg-background p-6">
-            {children}
+          <main className="relative flex-1 overflow-auto bg-gradient-to-br from-[#F6F1FC] via-white to-[#EAF3EA] p-4 sm:p-6">
+            <div
+              className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full opacity-30 blur-3xl"
+              style={{ backgroundColor: '#5C2D91' }}
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full opacity-25 blur-3xl"
+              style={{ backgroundColor: '#066A2B' }}
+              aria-hidden
+            />
+            <div className="relative z-[1]">{children}</div>
           </main>
         </div>
       </div>
