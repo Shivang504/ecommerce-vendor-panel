@@ -1,0 +1,27 @@
+{
+  "stamp": "611284",
+  "created": 3,
+  "vendor": "Kevin Stores",
+  "vendorId": "6960c4dc7b973da6385a27c8",
+  "products": [
+    {
+      "sku": "IMP-TEE-611284",
+      "id": "6b0516bda2450ee24e71e76c",
+      "type": "Physical Product"
+    },
+    {
+      "sku": "IMP-KUR-611284",
+      "id": "6b0516bda2450ee24e71e76d",
+      "type": "Physical Product"
+    },
+    {
+      "sku": "IMP-JWL-611284",
+      "id": "6b0516bda2450ee24e71e76e",
+      "type": "Jewellery"
+    }
+  ],
+  "files": [
+    "public/samples/product-import-template.xlsx",
+    "public/samples/product-import-sample-3rows.xlsx"
+  ]
+}
