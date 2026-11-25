@@ -293,15 +293,14 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
                       <p className="text-sm text-gray-600">
                         {address.city}, {address.state} - {address.pinCode}
                       </p>
-                      {address.shiprocketSyncedAt && (
-                        <p
-                          className={`text-xs mt-2 ${
-                            address.shiprocketVerified ? 'text-green-700' : 'text-amber-700'
-                          }`}>
-                          {address.shiprocketVerified
-                            ? 'Shiprocket: Active — ready for pickup'
-                            : 'Shiprocket: Address saved here. One-time OTP in Shiprocket panel needed before Ready for Pickup (Settings → Pickup Addresses).'}
+                      {address.shiprocketSyncedAt && address.shiprocketPickupCode && (
+                        <p className='mt-2 text-xs text-green-700'>
+                          Shiprocket: Synced
+                          {address.shiprocketVerified ? ' — ready for pickup' : ''}
                         </p>
+                      )}
+                      {address.shiprocketSyncedAt && !address.shiprocketPickupCode && address.shiprocketSyncError && (
+                        <p className='mt-2 text-xs text-amber-700'>Shiprocket: {address.shiprocketSyncError}</p>
                       )}
                     </div>
                     <div className="flex flex-col gap-2">

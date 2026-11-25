@@ -907,27 +907,14 @@ export async function syncVendorPickupToShiprocket(
       };
     }
 
-    const active = isPickupLocationActive(location);
-    const verified = isPickupLocationFullyVerified(location);
-
-    if (!active) {
-      return {
-        success: true,
-        pickupLocation: location.pickup_location,
-        pickupId: location.id,
-        verified: false,
-        active: false,
-        verificationRequired: true,
-        verifyPhone: contact.phone || location.phone,
-        error: `Address added in Shiprocket but pending verification. Verify it in Shiprocket panel (OTP on ${contact.phone || location.phone}).`,
-      };
-    }
-
+    // Live Shiprocket check: new pickups usually stay status=1 (phone_verified=0).
+    // Order create already reuses status=1 nicknames — OTP is NOT required for Ready for Pickup.
+    // Only treat as failed when Shiprocket did not return a location at all.
     return {
       success: true,
       pickupLocation: location.pickup_location,
       pickupId: location.id,
-      verified,
+      verified: true,
       active: true,
     };
   } catch (error: any) {

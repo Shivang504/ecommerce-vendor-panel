@@ -39,8 +39,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
     }
 
+    // Clear stale OTP warnings: if address already has a Shiprocket pickup code, treat as synced.
+    const addresses = normalizePickupAddresses(vendor).map(addr => {
+      if (!addr.shiprocketPickupCode && !addr.shiprocketPickupId) return addr;
+      return {
+        ...addr,
+        shiprocketVerified: true,
+        shiprocketSyncError: undefined,
+      };
+    });
+
     return NextResponse.json({
-      addresses: normalizePickupAddresses(vendor),
+      addresses,
       storeName: vendor.storeName || '',
       ownerName: vendor.ownerName || '',
       phone: vendor.phone || '',
@@ -181,14 +191,13 @@ export async function POST(request: NextRequest) {
           shiprocketSync = await syncVendorPickupToShiprocket(pickupInput);
           const idx = addresses.findIndex((a) => a.id === savedAddress.id);
           if (idx !== -1) {
-            // Active (status=2) is enough for shipping. phone_verified is Shiprocket's
-            // OTP flag — warn if still pending, but don't block local save.
             addresses[idx] = {
               ...addresses[idx],
               shiprocketPickupCode: shiprocketSync.pickupLocation || savedAddress.label,
               shiprocketPickupId: shiprocketSync.pickupId,
-              shiprocketVerified: !!shiprocketSync.active,
-              shiprocketSyncError: shiprocketSync.active ? undefined : shiprocketSync.error,
+              // status=1 pickups are usable for Ready for Pickup — do not force OTP UI
+              shiprocketVerified: !!shiprocketSync.success && !!shiprocketSync.pickupLocation,
+              shiprocketSyncError: shiprocketSync.success ? undefined : shiprocketSync.error,
               shiprocketSyncedAt: new Date().toISOString(),
             };
           }
