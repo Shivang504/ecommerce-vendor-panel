@@ -299,8 +299,8 @@ export function PickupAddressesCard({ enabled }: { enabled: boolean }) {
                             address.shiprocketVerified ? 'text-green-700' : 'text-amber-700'
                           }`}>
                           {address.shiprocketVerified
-                            ? 'Shiprocket: Verified'
-                            : `Shiprocket: Pending verification${address.shiprocketSyncError ? ` — ${address.shiprocketSyncError}` : ''}`}
+                            ? 'Shiprocket: Active — ready for pickup'
+                            : 'Shiprocket: Address saved here. One-time OTP in Shiprocket panel needed before Ready for Pickup (Settings → Pickup Addresses).'}
                         </p>
                       )}
                     </div>

@@ -181,12 +181,14 @@ export async function POST(request: NextRequest) {
           shiprocketSync = await syncVendorPickupToShiprocket(pickupInput);
           const idx = addresses.findIndex((a) => a.id === savedAddress.id);
           if (idx !== -1) {
+            // Active (status=2) is enough for shipping. phone_verified is Shiprocket's
+            // OTP flag — warn if still pending, but don't block local save.
             addresses[idx] = {
               ...addresses[idx],
               shiprocketPickupCode: shiprocketSync.pickupLocation || savedAddress.label,
               shiprocketPickupId: shiprocketSync.pickupId,
-              shiprocketVerified: shiprocketSync.verified && shiprocketSync.active,
-              shiprocketSyncError: shiprocketSync.error,
+              shiprocketVerified: !!shiprocketSync.active,
+              shiprocketSyncError: shiprocketSync.active ? undefined : shiprocketSync.error,
               shiprocketSyncedAt: new Date().toISOString(),
             };
           }
