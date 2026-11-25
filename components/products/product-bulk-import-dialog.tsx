@@ -157,15 +157,21 @@ export function ProductBulkImportDialog({
   };
 
   const downloadTemplate = (format: 'xlsx' | 'csv') => {
+    // Prefer packaged sample (Products + Categories + Guide sheets)
+    if (format === 'xlsx') {
+      const a = document.createElement('a');
+      a.href = '/samples/product-import-template.xlsx';
+      a.download = 'product-import-template.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(PRODUCT_IMPORT_TEMPLATE_ROWS);
     XLSX.utils.book_append_sheet(wb, ws, 'Products');
-
-    if (format === 'csv') {
-      XLSX.writeFile(wb, 'product-import-template.csv', { bookType: 'csv' });
-    } else {
-      XLSX.writeFile(wb, 'product-import-template.xlsx');
-    }
+    XLSX.writeFile(wb, 'product-import-template.csv', { bookType: 'csv' });
   };
 
   const handleImport = async () => {
